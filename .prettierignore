@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+pnpm-lock.yaml
+package-lock.json
+
+# Build outputs
+dist/
+dist-ssr/
+.wrangler/
+
+# Database files
+*.sqlite
+drizzle/
+
+# Generated files
+worker-configuration.d.ts
+
+# Configuration files
+pnpm-workspace.yaml
+
+# Kiro files
+.kiro/
+
+# Environment files
+.env*
+.dev.vars*
+
+# Editor files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

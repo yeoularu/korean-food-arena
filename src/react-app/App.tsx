@@ -1,15 +1,16 @@
 // src/App.tsx
 
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import viteLogo from "/vite.svg";
-import cloudflareLogo from "./assets/Cloudflare_Logo.svg";
-import honoLogo from "./assets/hono.svg";
-import "./App.css";
+import { useState } from 'react'
+import reactLogo from './assets/react.svg'
+import viteLogo from '/vite.svg'
+import cloudflareLogo from './assets/Cloudflare_Logo.svg'
+import honoLogo from './assets/hono.svg'
+import './App.css'
+import { authClient } from './auth-client'
 
 function App() {
-  const [count, setCount] = useState(0);
-  const [name, setName] = useState("unknown");
+  const [count, setCount] = useState(0)
+  const [name, setName] = useState('unknown')
 
   return (
     <>
@@ -45,10 +46,12 @@ function App() {
       </div>
       <div className="card">
         <button
-          onClick={() => {
-            fetch("/api/")
+          onClick={async () => {
+            const user = await authClient.signIn.anonymous()
+            console.log(user)
+            fetch('/api/')
               .then((res) => res.json() as Promise<{ name: string }>)
-              .then((data) => setName(data.name));
+              .then((data) => setName(data.name))
           }}
           aria-label="get name"
         >
@@ -60,7 +63,7 @@ function App() {
       </div>
       <p className="read-the-docs">Click on the logos to learn more</p>
     </>
-  );
+  )
 }
 
-export default App;
+export default App

@@ -1,7 +1,6 @@
 # Implementation Plan
 
 - [ ] 1. Set up project foundation and dependencies
-
   - Initialize Cloudflare Workers project with Hono framework
   - Install and configure TypeScript, Drizzle ORM, and Better-auth
   - Set up project structure with proper folder organization
@@ -9,16 +8,13 @@
   - _Requirements: 7.4_
 
 - [ ] 2. Configure database and authentication system
-
   - [ ] 2.1 Set up Cloudflare D1 database connection
-
     - Create D1 database instance and configure connection
     - Set up Drizzle ORM with D1 adapter configuration
     - Create database connection utilities and error handling
     - _Requirements: 7.1, 7.4_
 
   - [ ] 2.2 Implement Better-auth configuration with anonymous plugin
-
     - Configure Better-auth with Drizzle adapter for D1
     - Set up anonymous plugin with nationality support in user additionalFields
     - Create auth configuration with proper session management
@@ -34,9 +30,7 @@
     - _Requirements: 7.1, 7.2, 7.3, 4.6_
 
 - [ ] 3. Implement core ELO calculation system
-
   - [ ] 3.1 Create ELO calculation service
-
     - Implement standard ELO algorithm with K-factor of 32
     - Handle win/loss/tie scenarios for rating updates
     - Create utility functions for expected score calculations
@@ -51,9 +45,7 @@
     - _Requirements: 1.5, 1.6, 1.7, 1.8_
 
 - [ ] 4. Build API endpoints with Hono framework
-
   - [ ] 4.1 Create food management endpoints
-
     - Implement GET /api/foods/random-pair for food comparisons
     - Implement GET /api/foods/leaderboard for rankings display
     - Add proper error handling and response formatting
@@ -61,7 +53,6 @@
     - _Requirements: 1.1, 2.1, 2.2_
 
   - [ ] 4.2 Create voting system endpoints
-
     - Implement POST /api/votes for recording user selections with duplicate prevention
     - Implement GET /api/votes/stats/:food1Id/:food2Id for vote statistics with access control
     - Add nationality-based vote breakdown calculations
@@ -78,9 +69,7 @@
     - _Requirements: 3.1, 3.2, 3.3, 4.3, 4.4, 4.5, 4.6_
 
 - [ ] 5. Develop React frontend with TanStack Router and Query
-
   - [ ] 5.1 Set up React application structure
-
     - Initialize React SPA with TypeScript configuration
     - Configure TanStack Router for client-side routing
     - Set up TanStack Query with QueryClient and providers
@@ -89,7 +78,6 @@
     - _Requirements: 1.1, 6.1_
 
   - [ ] 5.2 Create TanStack Query hooks and API layer
-
     - Create custom hooks for food data fetching (useFoodPair, useLeaderboard)
     - Implement mutation hooks for voting and comments with optimistic updates
     - Set up query invalidation and refetch strategies
@@ -97,7 +85,6 @@
     - _Requirements: 1.1, 2.3, 4.1, 4.2, 5.1, 5.2_
 
   - [ ] 5.3 Build food comparison interface
-
     - Create FoodComparison component with two food display using TanStack Query
     - Implement primary selection buttons for each food item
     - Add expandable "More options" UI for tie/skip selections
@@ -105,7 +92,6 @@
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7_
 
   - [ ] 5.4 Create results and feedback interface
-
     - Build Results component showing vote percentages with access control
     - Display nationality breakdown when sufficient data available
     - Implement comment input with nationality selector
@@ -122,9 +108,7 @@
     - _Requirements: 2.1, 2.2, 2.3_
 
 - [ ] 6. Integrate authentication and session management
-
   - [ ] 6.1 Implement anonymous user flow
-
     - Set up automatic anonymous session creation on first visit
     - Handle nationality selection and session updates
     - Ensure proper session persistence across page reloads
@@ -140,7 +124,6 @@
     - _Requirements: 3.4, 3.5, 4.2, 4.4, 5.3, 6.2, 6.3_
 
 - [ ] 7. Seed database with Korean food data
-
   - Create comprehensive list of popular Korean foods with descriptions
   - Source high-quality food images and optimize for web delivery
   - Implement database seeding script with initial ELO scores
@@ -148,9 +131,7 @@
   - _Requirements: 7.1, 7.2_
 
 - [ ] 8. Add error handling and validation
-
   - [ ] 8.1 Implement comprehensive input validation
-
     - Add request validation for all API endpoints
     - Implement content sanitization for comments
     - Add rate limiting to prevent abuse
@@ -165,7 +146,6 @@
     - _Requirements: All requirements - user experience_
 
 - [ ] 9. Optimize performance and add caching
-
   - Implement Cloudflare KV caching for leaderboard data
   - Add image optimization and CDN configuration
   - Optimize database queries with proper indexing

@@ -90,25 +90,25 @@ graph TB
 // Custom hooks for data fetching
 const useFoodPair = () =>
   useQuery({
-    queryKey: ["foods", "random-pair"],
+    queryKey: ['foods', 'random-pair'],
     queryFn: () => api.foods.getRandomPair(),
     staleTime: 0, // Always fetch fresh pair
-  });
+  })
 
 const useLeaderboard = () =>
   useQuery({
-    queryKey: ["foods", "leaderboard"],
+    queryKey: ['foods', 'leaderboard'],
     queryFn: () => api.foods.getLeaderboard(),
     staleTime: 30000, // Cache for 30 seconds
     refetchInterval: 60000, // Auto-refetch every minute
-  });
+  })
 
 const useVoteStats = (food1Id: string, food2Id: string) =>
   useQuery({
-    queryKey: ["votes", "stats", food1Id, food2Id],
+    queryKey: ['votes', 'stats', food1Id, food2Id],
     queryFn: () => api.votes.getStats(food1Id, food2Id),
     enabled: !!food1Id && !!food2Id,
-  });
+  })
 ```
 
 #### Mutation Management
@@ -120,26 +120,26 @@ const useVoteMutation = () =>
     mutationFn: api.votes.create,
     onMutate: async (newVote) => {
       // Optimistically update leaderboard
-      await queryClient.cancelQueries(["foods", "leaderboard"]);
-      const previousData = queryClient.getQueryData(["foods", "leaderboard"]);
+      await queryClient.cancelQueries(['foods', 'leaderboard'])
+      const previousData = queryClient.getQueryData(['foods', 'leaderboard'])
 
-      queryClient.setQueryData(["foods", "leaderboard"], (old) => {
+      queryClient.setQueryData(['foods', 'leaderboard'], (old) => {
         // Optimistic ELO calculation
-        return updateLeaderboardOptimistically(old, newVote);
-      });
+        return updateLeaderboardOptimistically(old, newVote)
+      })
 
-      return { previousData };
+      return { previousData }
     },
     onError: (err, newVote, context) => {
       // Rollback on error
-      queryClient.setQueryData(["foods", "leaderboard"], context.previousData);
+      queryClient.setQueryData(['foods', 'leaderboard'], context.previousData)
     },
     onSettled: () => {
       // Refetch to ensure consistency
-      queryClient.invalidateQueries(["foods", "leaderboard"]);
-      queryClient.invalidateQueries(["votes", "stats"]);
+      queryClient.invalidateQueries(['foods', 'leaderboard'])
+      queryClient.invalidateQueries(['votes', 'stats'])
     },
-  });
+  })
 ```
 
 ### Backend API Endpoints
@@ -147,11 +147,11 @@ const useVoteMutation = () =>
 #### Food Management
 
 ```typescript
-GET / api / foods / random - pair;
+GET / api / foods / random - pair
 // Returns two random foods for comparison
 // Response: { food1: Food, food2: Food }
 
-GET / api / foods / leaderboard;
+GET / api / foods / leaderboard
 // Returns all foods sorted by ELO score
 // Response: Food[]
 ```
@@ -212,19 +212,19 @@ POST /api/auth/session/update
 
 ```typescript
 // auth.ts - Better-auth configuration
-import { betterAuth } from "better-auth";
-import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { anonymous } from "better-auth/plugins";
-import { db } from "./db";
+import { betterAuth } from 'better-auth'
+import { drizzleAdapter } from 'better-auth/adapters/drizzle'
+import { anonymous } from 'better-auth/plugins'
+import { db } from './db'
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
-    provider: "sqlite",
+    provider: 'sqlite',
   }),
   user: {
     additionalFields: {
       nationality: {
-        type: "string",
+        type: 'string',
         required: false,
         input: true, // Allow users to set nationality
       },
@@ -232,54 +232,54 @@ export const auth = betterAuth({
   },
   plugins: [
     anonymous({
-      emailDomainName: "korean-food-elo.com",
+      emailDomainName: 'korean-food-elo.com',
       generateName: () =>
         `Anonymous User ${Math.random().toString(36).substr(2, 9)}`,
     }),
   ],
-});
+})
 
 // schema.ts - Custom tables (Better-auth tables are auto-generated)
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
-import { sql } from "drizzle-orm";
+import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core'
+import { sql } from 'drizzle-orm'
 
-export const foods = sqliteTable("foods", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  imageUrl: text("image_url").notNull(),
-  eloScore: integer("elo_score").default(1200).notNull(),
-  totalVotes: integer("total_votes").default(0).notNull(),
-  createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
-  updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
-});
+export const foods = sqliteTable('foods', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  imageUrl: text('image_url').notNull(),
+  eloScore: integer('elo_score').default(1200).notNull(),
+  totalVotes: integer('total_votes').default(0).notNull(),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
+})
 
-export const votes = sqliteTable("votes", {
-  id: text("id").primaryKey(),
-  food1Id: text("food1_id").references(() => foods.id),
-  food2Id: text("food2_id").references(() => foods.id),
-  selectedFood: text("selected_food", {
-    enum: ["food1", "food2", "tie", "skip"],
+export const votes = sqliteTable('votes', {
+  id: text('id').primaryKey(),
+  food1Id: text('food1_id').references(() => foods.id),
+  food2Id: text('food2_id').references(() => foods.id),
+  selectedFood: text('selected_food', {
+    enum: ['food1', 'food2', 'tie', 'skip'],
   }).notNull(),
-  userId: text("user_id"), // References better-auth user table
-  createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
-});
+  userId: text('user_id'), // References better-auth user table
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+})
 
-export const comments = sqliteTable("comments", {
-  id: text("id").primaryKey(),
-  food1Id: text("food1_id").references(() => foods.id),
-  food2Id: text("food2_id").references(() => foods.id),
-  selectedFood: text("selected_food", {
-    enum: ["food1", "food2", "tie"],
+export const comments = sqliteTable('comments', {
+  id: text('id').primaryKey(),
+  food1Id: text('food1_id').references(() => foods.id),
+  food2Id: text('food2_id').references(() => foods.id),
+  selectedFood: text('selected_food', {
+    enum: ['food1', 'food2', 'tie'],
   }).notNull(),
-  content: text("content").notNull(),
-  userId: text("user_id"), // References better-auth user table
-  createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
-});
+  content: text('content').notNull(),
+  userId: text('user_id'), // References better-auth user table
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+})
 
 // Type inference
-export type Food = typeof foods.$inferSelect;
-export type Vote = typeof votes.$inferSelect;
-export type Comment = typeof comments.$inferSelect;
+export type Food = typeof foods.$inferSelect
+export type Vote = typeof votes.$inferSelect
+export type Comment = typeof comments.$inferSelect
 // User type is inferred from better-auth with nationality field
 ```
 
@@ -341,41 +341,41 @@ CREATE UNIQUE INDEX idx_votes_user_pairing ON votes(user_id, food1_id, food2_id)
 
 ```typescript
 class ELOCalculator {
-  private static readonly K_FACTOR = 32; // Standard K-factor for ELO
+  private static readonly K_FACTOR = 32 // Standard K-factor for ELO
 
   static calculateNewRatings(
     rating1: number,
     rating2: number,
-    result: "win" | "loss" | "tie"
+    result: 'win' | 'loss' | 'tie',
   ): { newRating1: number; newRating2: number } {
-    const expected1 = 1 / (1 + Math.pow(10, (rating2 - rating1) / 400));
-    const expected2 = 1 - expected1;
+    const expected1 = 1 / (1 + Math.pow(10, (rating2 - rating1) / 400))
+    const expected2 = 1 - expected1
 
-    let actual1: number, actual2: number;
+    let actual1: number, actual2: number
 
     switch (result) {
-      case "win":
-        actual1 = 1;
-        actual2 = 0;
-        break;
-      case "loss":
-        actual1 = 0;
-        actual2 = 1;
-        break;
-      case "tie":
-        actual1 = 0.5;
-        actual2 = 0.5;
-        break;
+      case 'win':
+        actual1 = 1
+        actual2 = 0
+        break
+      case 'loss':
+        actual1 = 0
+        actual2 = 1
+        break
+      case 'tie':
+        actual1 = 0.5
+        actual2 = 0.5
+        break
     }
 
     const newRating1 = Math.round(
-      rating1 + this.K_FACTOR * (actual1 - expected1)
-    );
+      rating1 + this.K_FACTOR * (actual1 - expected1),
+    )
     const newRating2 = Math.round(
-      rating2 + this.K_FACTOR * (actual2 - expected2)
-    );
+      rating2 + this.K_FACTOR * (actual2 - expected2),
+    )
 
-    return { newRating1, newRating2 };
+    return { newRating1, newRating2 }
   }
 }
 ```
@@ -411,10 +411,10 @@ class ELOCalculator {
 
 ```typescript
 interface ErrorResponse {
-  error: string;
-  message: string;
-  code: number;
-  details?: any;
+  error: string
+  message: string
+  code: number
+  details?: any
 }
 ```
 

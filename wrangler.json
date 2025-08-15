@@ -1,12 +1,8 @@
-/**
- * For more details on how to configure Wrangler, refer to:
- * https://developers.cloudflare.com/workers/wrangler/configuration/
- */
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "korean-food-arena",
   "main": "./src/worker/index.ts",
-  "compatibility_date": "2025-04-01",
+  "compatibility_date": "2025-08-15",
   "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": true
@@ -16,5 +12,13 @@
   "assets": {
     "directory": "./dist/client",
     "not_found_handling": "single-page-application"
-  }
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "korean-food-arena-d1",
+      "database_id": "c5f3400b-2aa5-4523-97a1-c9303d074e70",
+      "migrations_dir": "drizzle"
+    }
+  ]
 }
