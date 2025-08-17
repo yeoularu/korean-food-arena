@@ -77,8 +77,10 @@ The Korean Food ELO Ranking System is a web application where users can view two
 
 1. WHEN a user makes their first selection or comment THEN the system SHALL optionally prompt for nationality selection
 2. WHEN nationality is provided THEN the system SHALL store it with the user's session for future votes and comments
-3. WHEN nationality data is collected THEN the system SHALL use it for vote analytics and comment attribution
-4. WHEN a user chooses not to provide nationality THEN the system SHALL allow full participation without this information
+3. WHEN nationality data is collected THEN the system SHALL capture a snapshot of the user's nationality at the time of each vote and comment
+4. WHEN nationality data is used for analytics THEN the system SHALL use the nationality snapshot from the time of the vote/comment, not the current user nationality
+5. WHEN a user chooses not to provide nationality THEN the system SHALL allow full participation without this information
+6. WHEN a user changes their nationality THEN the system SHALL not retroactively change past vote/comment nationality data
 
 ### Requirement 7
 
@@ -88,5 +90,7 @@ The Korean Food ELO Ranking System is a web application where users can view two
 
 1. WHEN the system initializes THEN the system SHALL seed the database with predefined Korean food data including names, images, and initial ELO scores
 2. WHEN food data is stored THEN each food SHALL have a unique identifier, name, image URL, and current ELO score
-3. WHEN ELO calculation is performed THEN the system SHALL use the standard ELO algorithm and persist the updated scores atomically
-4. WHEN the application starts THEN the system SHALL ensure database connectivity and data integrity
+3. WHEN ELO calculation is performed THEN the system SHALL use the standard ELO algorithm and persist the updated scores atomically with concurrency control
+4. WHEN vote data is stored THEN the system SHALL use normalized pair keys to prevent duplicate entries for (A,B) vs (B,A) comparisons
+5. WHEN concurrent votes occur THEN the system SHALL use optimistic locking with updated_at timestamps to prevent race conditions
+6. WHEN the application starts THEN the system SHALL ensure database connectivity and data integrity

@@ -23,10 +23,11 @@
 
   - [ ] 2.3 Create custom database schema for foods, votes, and comments
     - Define Drizzle schema for foods table with ELO scoring
-    - Define votes table with foreign key references to foods and users
-    - Define comments table with content and user relationships
-    - Add composite unique index on votes table (user_id, food1_id, food2_id) to prevent duplicate voting
-    - Generate and apply database migrations using Better-auth CLI
+    - Define votes table with normalized pairKey, foodA/foodB references, and nationality snapshot
+    - Define comments table with pairKey, content, and nationality snapshot
+    - Add composite unique index on votes table (user_id, pair_key) to prevent duplicate voting
+    - Implement pairKey normalization utility: min(foodA,foodB)+'_'+max(foodA,foodB)
+    - Generate and apply database migrations using Drizzle Kit (drizzle-kit)
     - _Requirements: 7.1, 7.2, 7.3, 4.6_
 
 - [ ] 3. Implement core ELO calculation system
@@ -37,11 +38,13 @@
     - Write comprehensive unit tests for ELO calculations
     - _Requirements: 1.8, 7.3_
 
-  - [ ] 3.2 Implement vote processing with ELO updates
-    - Create vote recording service with database transactions
+  - [ ] 3.2 Implement vote processing with ELO updates and concurrency control
+    - Create vote recording service with D1 database transactions
     - Integrate ELO calculation with vote processing
     - Handle skip votes (no ELO impact) vs scoring votes
-    - Ensure atomic updates of food ratings and vote records
+    - Implement optimistic locking with updated_at conditional updates
+    - Ensure atomic updates of food ratings and vote records with retry logic
+    - Add nationality snapshot capture at vote time
     - _Requirements: 1.5, 1.6, 1.7, 1.8_
 
 - [ ] 4. Build API endpoints with Hono framework
@@ -53,19 +56,21 @@
     - _Requirements: 1.1, 2.1, 2.2_
 
   - [ ] 4.2 Create voting system endpoints
-    - Implement POST /api/votes for recording user selections with duplicate prevention
-    - Implement GET /api/votes/stats/:food1Id/:food2Id for vote statistics with access control
-    - Add nationality-based vote breakdown calculations
+    - Implement POST /api/votes for recording user selections with pairKey normalization
+    - Implement GET /api/votes/stats/:pairKey for vote statistics with access control
+    - Add nationality-based vote breakdown calculations using nationality snapshots
     - Integrate with Better-auth session management
-    - Add composite unique constraint checking to prevent duplicate votes on same pairing
+    - Add composite unique constraint checking to prevent duplicate votes on same pairKey
+    - Implement Zod validation for all request/response schemas
     - _Requirements: 1.5, 1.6, 1.7, 1.8, 4.1, 4.2, 4.6, 5.1, 5.2, 5.3_
 
   - [ ] 4.3 Create comments system endpoints
-    - Implement POST /api/comments for comment creation
-    - Implement GET /api/comments/:food1Id/:food2Id for comment retrieval with access control
-    - Add content validation and sanitization for comments
+    - Implement POST /api/comments for comment creation with pairKey
+    - Implement GET /api/comments/:pairKey for comment retrieval with access control
+    - Add content validation, sanitization, and length limits for comments
     - Ensure proper user association through Better-auth sessions
-    - Add access control to verify user has voted on pairing before showing comments
+    - Add access control to verify user has voted on pairKey before showing comments
+    - Implement nationality snapshot capture at comment time
     - _Requirements: 3.1, 3.2, 3.3, 4.3, 4.4, 4.5, 4.6_
 
 - [ ] 5. Develop React frontend with TanStack Router and Query
@@ -79,25 +84,27 @@
 
   - [ ] 5.2 Create TanStack Query hooks and API layer
     - Create custom hooks for food data fetching (useFoodPair, useLeaderboard)
-    - Implement mutation hooks for voting and comments with optimistic updates
-    - Set up query invalidation and refetch strategies
+    - Implement mutation hooks for voting and comments with conservative invalidation approach
+    - Set up query invalidation and refetch strategies (avoid optimistic updates initially)
     - Add error handling and loading states for all queries
+    - Implement pairKey-based query keys for consistent caching
+    - Update useVoteStats hook to accept pairKey parameter instead of separate food IDs
     - _Requirements: 1.1, 2.3, 4.1, 4.2, 5.1, 5.2_
 
   - [ ] 5.3 Build food comparison interface
     - Create FoodComparison component with two food display using TanStack Query
     - Implement primary selection buttons for each food item
     - Add expandable "More options" UI for tie/skip selections
-    - Handle user selections with optimistic updates and navigation to results
+    - Handle user selections with invalidation-based refresh and navigation to results
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7_
 
   - [ ] 5.4 Create results and feedback interface
-    - Build Results component showing vote percentages with access control
-    - Display nationality breakdown when sufficient data available
-    - Implement comment input with nationality selector
-    - Show recent comments for the specific food pairing (only after user has voted)
+    - Build Results component showing vote percentages with pairKey-based access control
+    - Display nationality breakdown using nationality snapshots when sufficient data available
+    - Implement comment input with nationality selector and content validation
+    - Show recent comments for the specific pairKey (only after user has voted)
     - Add "Continue" button for next comparison
-    - Implement access control to only show results after user votes on that pairing
+    - Implement route-level access control to only show results after user votes on that pairKey
     - _Requirements: 3.1, 4.1, 4.2, 4.3, 4.4, 4.6, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6_
 
   - [ ] 5.5 Implement leaderboard display
@@ -108,9 +115,9 @@
     - _Requirements: 2.1, 2.2, 2.3_
 
 - [ ] 6. Integrate authentication and session management
-  - [ ] 6.1 Implement anonymous user flow
-    - Set up automatic anonymous session creation on first visit
-    - Handle nationality selection and session updates
+  - [ ] 6.1 Implement anonymous user flow with EnsureSession pattern
+    - Set up EnsureSession component to wrap RouterProvider for automatic anonymous session creation
+    - Handle nationality selection and session updates through better-auth
     - Ensure proper session persistence across page reloads
     - Test anonymous user voting and commenting functionality
     - Implement first-time user nationality prompt after initial vote/comment
@@ -146,10 +153,14 @@
     - _Requirements: All requirements - user experience_
 
 - [ ] 9. Optimize performance and add caching
-  - Implement Cloudflare KV caching for leaderboard data
-  - Add image optimization and CDN configuration
-  - Optimize database queries with proper indexing
+  - Implement Cloudflare KV caching for leaderboard data with 30-60s TTL
+  - Add Workers Cache API (caches.default) for API response caching
+  - Consider Cloudflare Images for optimized image delivery
+  - Optimize database queries with proper pairKey indexing
   - Add response compression and caching headers
+  - Implement cache invalidation on vote mutations for KV and Workers Cache
+  - Set appropriate Cache-Control headers on GET endpoints
+  - Implement rate limiting using KV counters or Durable Objects
   - _Requirements: 2.3 - real-time updates, performance optimization_
 
 - [ ] 10. Deploy and configure production environment

@@ -21,7 +21,7 @@ graph TB
     A[User Browser] --> B[React SPA + TanStack Router]
     B --> C[Hono API on Cloudflare Workers]
     C --> D[Cloudflare D1 Database]
-    C --> E[ELO Calculation Service]
+    C --> E[ELO Calculation Module]
     E --> D
 
     subgraph "D1 Database Tables"
@@ -67,7 +67,7 @@ graph TB
 - Sortable list of foods by ELO score using TanStack Query
 - Food photos, names, scores, and rankings
 - Real-time score updates with automatic refetching
-- Optimistic updates for immediate UI feedback
+- Conservative invalidation-based updates (optimistic updates as future enhancement)
 
 #### 4. Navigation Component
 
@@ -103,28 +103,39 @@ const useLeaderboard = () =>
     refetchInterval: 60000, // Auto-refetch every minute
   })
 
-const useVoteStats = (food1Id: string, food2Id: string) =>
+const useVoteStats = (pairKey: string) =>
   useQuery({
-    queryKey: ['votes', 'stats', food1Id, food2Id],
-    queryFn: () => api.votes.getStats(food1Id, food2Id),
-    enabled: !!food1Id && !!food2Id,
+    queryKey: ['votes', 'stats', pairKey],
+    queryFn: () => api.votes.getStats(pairKey),
+    enabled: !!pairKey,
   })
 ```
 
 #### Mutation Management
 
 ```typescript
-// Optimistic updates for voting
+// Conservative approach for voting mutations (recommended for initial version)
 const useVoteMutation = () =>
   useMutation({
     mutationFn: api.votes.create,
+    onSuccess: () => {
+      // Invalidate and refetch for consistency
+      queryClient.invalidateQueries(['foods', 'leaderboard'])
+      queryClient.invalidateQueries(['votes', 'stats'])
+    },
+  })
+
+// Optional: Optimistic updates for advanced version (use with caution)
+const useOptimisticVoteMutation = () =>
+  useMutation({
+    mutationFn: api.votes.create,
     onMutate: async (newVote) => {
-      // Optimistically update leaderboard
+      // Cancel outgoing queries to avoid race conditions
       await queryClient.cancelQueries(['foods', 'leaderboard'])
       const previousData = queryClient.getQueryData(['foods', 'leaderboard'])
 
       queryClient.setQueryData(['foods', 'leaderboard'], (old) => {
-        // Optimistic ELO calculation
+        // Optimistic ELO calculation - may cause ranking jumps in concurrent scenarios
         return updateLeaderboardOptimistically(old, newVote)
       })
 
@@ -135,23 +146,25 @@ const useVoteMutation = () =>
       queryClient.setQueryData(['foods', 'leaderboard'], context.previousData)
     },
     onSettled: () => {
-      // Refetch to ensure consistency
+      // Always refetch to ensure server consistency
       queryClient.invalidateQueries(['foods', 'leaderboard'])
       queryClient.invalidateQueries(['votes', 'stats'])
     },
   })
 ```
 
+**Note**: For initial implementation, use invalidate-based approach to ensure consistency. Optimistic updates can be added later once the core system is stable.
+
 ### Backend API Endpoints
 
 #### Food Management
 
 ```typescript
-GET / api / foods / random - pair
+GET /api/foods/random-pair
 // Returns two random foods for comparison
 // Response: { food1: Food, food2: Food }
 
-GET / api / foods / leaderboard
+GET /api/foods/leaderboard
 // Returns all foods sorted by ELO score
 // Response: Food[]
 ```
@@ -161,15 +174,15 @@ GET / api / foods / leaderboard
 ```typescript
 POST /api/votes
 // Records a vote and updates ELO scores
-// Body: { food1Id, food2Id, selection: 'food1' | 'food2' | 'tie' | 'skip', sessionId?, nationality? }
-// Response: { updatedScores: { food1: number, food2: number }, voteStats: VoteStats, hasVoted: boolean }
-// Note: Prevents duplicate voting on same pairing by same user
+// Body: { pairKey: string, foodAId: string, foodBId: string, chosen: 'a' | 'b' | 'tie' | 'skip', nationalityAtVote?: string }
+// Response: { updatedScores: { foodA: number, foodB: number }, voteStats: VoteStats }
+// Note: Uses normalized pairKey to prevent (A,B) vs (B,A) duplicates
 
-GET /api/votes/stats/:food1Id/:food2Id
+GET /api/votes/stats/:pairKey
 // Returns voting statistics for a specific pairing (requires user to have voted on this pairing)
 // Headers: Authorization with session token
-// Response: { totalVotes, food1Percentage, food2Percentage, nationalityBreakdown, userHasVoted: boolean }
-// Note: Returns 403 if user hasn't voted on this pairing (Requirement 4.6)
+// Response: { totalVotes, chosenAPercentage, chosenBPercentage, nationalityBreakdown, userHasVoted: boolean }
+// Note: Returns 403 if user hasn't voted on this pairKey (Requirement 4.6)
 ```
 
 #### Comments System
@@ -177,14 +190,14 @@ GET /api/votes/stats/:food1Id/:food2Id
 ```typescript
 POST /api/comments
 // Creates a new comment
-// Body: { food1Id, food2Id, selectedFood, content, nationality?, sessionId }
+// Body: { pairKey: string, chosen: 'a' | 'b' | 'tie', content: string, nationalityAtComment?: string }
 // Response: Comment
 
-GET /api/comments/:food1Id/:food2Id
+GET /api/comments/:pairKey
 // Returns recent comments for a food pairing (requires user to have voted on this pairing)
 // Headers: Authorization with session token
-// Response: Comment[] with selectedFood, content, nationality, and timestamp
-// Note: Returns 403 if user hasn't voted on this pairing (Requirement 4.6)
+// Response: Comment[] with chosen, content, nationalityAtComment, and timestamp
+// Note: Returns 403 if user hasn't voted on this pairKey (Requirement 4.6)
 ```
 
 #### Authentication & Session Management (Better-auth)
@@ -199,11 +212,45 @@ GET /api/auth/session
 // Gets current session
 // Response: { user, session }
 
-POST /api/auth/session/update
-// Updates user nationality (prompted after first vote/comment)
+// Custom endpoint for updating user nationality
+POST /api/auth/update-nationality
+// Updates user nationality through Better-auth server API
 // Body: { nationality? }
 // Response: { user, session }
 // Note: Nationality is optional and can be skipped entirely
+```
+
+#### Frontend Session Management Pattern
+
+```typescript
+// EnsureSession component to guarantee anonymous session on first visit
+function EnsureSession({ children }: { children: React.ReactNode }) {
+  const { data: session, isLoading } = useSession()
+  const signInAnonymous = useSignInAnonymous()
+
+  useEffect(() => {
+    if (!isLoading && !session) {
+      signInAnonymous.mutate()
+    }
+  }, [session, isLoading])
+
+  if (isLoading || (!session && !signInAnonymous.isError)) {
+    return <LoadingSpinner />
+  }
+
+  return <>{children}</>
+}
+
+// Wrap RouterProvider with EnsureSession
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <EnsureSession>
+        <RouterProvider router={router} />
+      </EnsureSession>
+    </QueryClientProvider>
+  )
+}
 ```
 
 ## Data Models
@@ -254,25 +301,27 @@ export const foods = sqliteTable('foods', {
 })
 
 export const votes = sqliteTable('votes', {
-  id: text('id').primaryKey(),
-  food1Id: text('food1_id').references(() => foods.id),
-  food2Id: text('food2_id').references(() => foods.id),
-  selectedFood: text('selected_food', {
-    enum: ['food1', 'food2', 'tie', 'skip'],
+  id: text('id').primaryKey(), // Use cuid2 or ulid for better performance
+  pairKey: text('pair_key').notNull(), // Normalized: min(foodA,foodB)+'_'+max(foodA,foodB)
+  foodAId: text('food_a_id').references(() => foods.id),
+  foodBId: text('food_b_id').references(() => foods.id),
+  chosen: text('chosen', {
+    enum: ['a', 'b', 'tie', 'skip'],
   }).notNull(),
   userId: text('user_id'), // References better-auth user table
+  nationalityAtVote: text('nationality_at_vote'), // Snapshot of user's nationality at vote time
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
 })
 
 export const comments = sqliteTable('comments', {
-  id: text('id').primaryKey(),
-  food1Id: text('food1_id').references(() => foods.id),
-  food2Id: text('food2_id').references(() => foods.id),
-  selectedFood: text('selected_food', {
-    enum: ['food1', 'food2', 'tie'],
+  id: text('id').primaryKey(), // Use cuid2 or ulid for better performance
+  pairKey: text('pair_key').notNull(), // Same normalized pairKey as votes
+  chosen: text('chosen', {
+    enum: ['a', 'b', 'tie'],
   }).notNull(),
   content: text('content').notNull(),
   userId: text('user_id'), // References better-auth user table
+  nationalityAtComment: text('nationality_at_comment'), // Snapshot of user's nationality at comment time
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
 })
 
@@ -304,35 +353,37 @@ CREATE TABLE foods (
 
 -- Custom Votes table
 CREATE TABLE votes (
-  id TEXT PRIMARY KEY,
-  food1_id TEXT REFERENCES foods(id),
-  food2_id TEXT REFERENCES foods(id),
-  selected_food TEXT CHECK (selected_food IN ('food1', 'food2', 'tie', 'skip')),
+  id TEXT PRIMARY KEY, -- Use cuid2() or ulid() for better performance
+  pair_key TEXT NOT NULL, -- Normalized: min(food_a_id, food_b_id) + '_' + max(food_a_id, food_b_id)
+  food_a_id TEXT REFERENCES foods(id),
+  food_b_id TEXT REFERENCES foods(id),
+  chosen TEXT CHECK (chosen IN ('a', 'b', 'tie', 'skip')),
   user_id TEXT REFERENCES user(id), -- Better-auth user table
+  nationality_at_vote TEXT, -- Snapshot of user's nationality at vote time
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Custom Comments table
 CREATE TABLE comments (
-  id TEXT PRIMARY KEY,
-  food1_id TEXT REFERENCES foods(id),
-  food2_id TEXT REFERENCES foods(id),
-  selected_food TEXT CHECK (selected_food IN ('food1', 'food2', 'tie')),
+  id TEXT PRIMARY KEY, -- Use cuid2() or ulid() for better performance
+  pair_key TEXT NOT NULL, -- Same normalized pairKey as votes
+  chosen TEXT CHECK (chosen IN ('a', 'b', 'tie')),
   content TEXT NOT NULL,
   user_id TEXT REFERENCES user(id), -- Better-auth user table
+  nationality_at_comment TEXT, -- Snapshot of user's nationality at comment time
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Indexes for performance
-CREATE INDEX idx_votes_foods ON votes(food1_id, food2_id);
-CREATE INDEX idx_comments_foods ON comments(food1_id, food2_id);
-CREATE INDEX idx_foods_elo ON foods(elo_score DESC);
+CREATE INDEX idx_votes_pair_key ON votes(pair_key);
+CREATE INDEX idx_comments_pair_key ON comments(pair_key);
+CREATE INDEX idx_foods_elo ON foods(elo_score);
 CREATE INDEX idx_votes_created_at ON votes(created_at DESC);
 CREATE INDEX idx_comments_created_at ON comments(created_at DESC);
 CREATE INDEX idx_votes_user ON votes(user_id);
 CREATE INDEX idx_comments_user ON comments(user_id);
--- Composite index for checking if user has voted on specific pairing (Requirement 4.6)
-CREATE UNIQUE INDEX idx_votes_user_pairing ON votes(user_id, food1_id, food2_id);
+-- Composite unique index for preventing duplicate votes on same pairing (Requirement 4.6)
+CREATE UNIQUE INDEX idx_votes_user_pair ON votes(user_id, pair_key);
 ```
 
 ## ELO Calculation System
@@ -380,16 +431,32 @@ class ELOCalculator {
 }
 ```
 
-### Vote Processing Flow
+### Vote Processing Flow with Concurrency Control
 
 1. Receive vote from frontend with session validation
-2. Validate vote data and ensure user hasn't voted on this pairing before
-3. Calculate new ELO scores (skip votes don't affect ELO, ties count as 0.5 points each)
-4. Update food records in database transaction with optimistic locking
-5. Store vote record with user session and optional nationality
-6. Return updated scores, vote statistics, and nationality breakdown
-7. **Immediate Results**: Frontend automatically navigates to results screen
-8. **Access Control**: Results are only shown for pairings where user has voted
+2. Validate vote data and ensure user hasn't voted on this pairKey before (using unique constraint)
+3. **D1 Transaction Processing**:
+   - Begin transaction
+   - Query current ELO scores for both foods with `updated_at` timestamps
+   - Calculate new ELO scores (skip votes don't affect ELO, ties count as 0.5 points each)
+   - Update food records with conditional `WHERE updated_at = ?` to prevent race conditions
+   - If update affects 0 rows, retry transaction (optimistic locking)
+   - Insert vote record with normalized pairKey and nationality snapshot
+   - Commit transaction
+4. Return updated scores, vote statistics, and nationality breakdown
+5. **Immediate Results**: Frontend automatically navigates to results screen
+6. **Access Control**: Results are only shown for pairings where user has voted
+
+### Pair Key Normalization
+
+```typescript
+function createPairKey(foodAId: string, foodBId: string): string {
+  const [min, max] = [foodAId, foodBId].sort()
+  return `${min}_${max}`
+}
+```
+
+This prevents duplicate entries for (A,B) vs (B,A) comparisons and ensures consistent data structure.
 
 ## Error Handling
 
@@ -452,20 +519,23 @@ interface ErrorResponse {
 ### Database Optimization
 
 - Proper indexing on frequently queried columns
-- Connection pooling for concurrent requests
 - Query optimization for leaderboard and statistics
+- Retry with backoff on transient D1 errors
+- Optimistic retry on updated_at conflicts for ELO updates
 
 ### Caching Strategy
 
-- Redis cache for frequently accessed leaderboard data
-- Browser caching for food images
-- API response caching for static data
+- **Cloudflare KV** for frequently accessed leaderboard data with 30-60s TTL
+- **Workers Cache API** (caches.default) for API response caching
+- Browser caching for food images with strong Cache-Control headers
+- Consider **Cloudflare Images** for optimized image delivery
+- **Cache Invalidation**: When votes mutate ELO scores, invalidate KV leaderboard cache and Workers Cache entries for `/api/foods/leaderboard` and related `stats/:pairKey` endpoints
 
 ### Scalability
 
-- Horizontal scaling capability for API servers
-- Database read replicas for heavy read operations
-- CDN for static assets and images
+- **Cloudflare Workers** provide automatic horizontal scaling
+- **D1 Database** handles concurrent requests without connection pooling concerns
+- CDN for static assets and images through Cloudflare's global network
 
 ## Access Control Design
 
@@ -475,7 +545,7 @@ interface ErrorResponse {
 
 **Implementation**:
 
-- Vote records include composite unique constraint on (user_id, food1_id, food2_id)
+- Vote records include composite unique constraint on (user_id, pair_key)
 - Results and comments endpoints verify user has voted before returning data
 - Frontend enforces this by only navigating to results after successful vote submission
 - Database queries join votes table to verify user participation before showing results
@@ -494,12 +564,16 @@ interface ErrorResponse {
 - Optional nationality data with user consent
 - Session-based tracking without persistent user accounts
 
-### Input Validation
+### Input Validation and Rate Limiting
 
-- Sanitize all user inputs to prevent XSS
-- Validate vote selections and comment content
-- Rate limiting on API endpoints
-- Prevent duplicate voting on same pairing by same user
+- Sanitize all user inputs to prevent XSS (DOMPurify on client, server-side sanitization)
+- Validate vote selections and comment content with Zod schemas
+- **Rate limiting strategies**:
+  - **Cloudflare KV** with sliding window counters for IP/session-based limits
+  - **Durable Objects** for more complex rate limiting scenarios
+  - **Turnstile** integration for bot prevention
+- Prevent duplicate voting on same pairKey by same user (unique constraint)
+- Content length limits and profanity filtering for comments
 
 ### Database Security
 

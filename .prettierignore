@@ -25,13 +25,12 @@ pnpm-workspace.yaml
 .env*
 .dev.vars*
 
-# Editor files
-.vscode/
-.idea/
-
 # OS files
 .DS_Store
 Thumbs.db
 
 # Logs
 *.log
+
+# tanstack router
+**/routeTree.gen.ts

@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "korean-food-arena",
   "main": "./src/worker/index.ts",
-  "compatibility_date": "2025-08-15",
+  "compatibility_date": "2025-08-13",
   "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": true
