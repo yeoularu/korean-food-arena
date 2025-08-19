@@ -5,29 +5,30 @@
   - Install and configure TypeScript, Drizzle ORM, and Better-auth
   - Set up project structure with proper folder organization
   - Configure build and development scripts
-  - _Requirements: 7.4_
+  - _Requirements: 7.6_
 
 - [ ] 2. Configure database and authentication system
   - [ ] 2.1 Set up Cloudflare D1 database connection
     - Create D1 database instance and configure connection
     - Set up Drizzle ORM with D1 adapter configuration
     - Create database connection utilities and error handling
-    - _Requirements: 7.1, 7.4_
+    - _Requirements: 7.1, 7.6_
 
   - [ ] 2.2 Implement Better-auth configuration with anonymous plugin
     - Configure Better-auth with Drizzle adapter for D1
-    - Set up anonymous plugin with nationality support in user additionalFields
+    - Confirm actual table names (user vs users) and update schema references
+    - Set up anonymous plugin with optional nationality field in user additionalFields
     - Create auth configuration with proper session management
     - Test anonymous user creation and session handling
     - _Requirements: 6.1, 6.2, 6.3, 6.4_
 
-  - [ ] 2.3 Create custom database schema for foods, votes, and comments
+  - [ ] 2.3 Create custom database schema with normalized data model
     - Define Drizzle schema for foods table with ELO scoring
-    - Define votes table with normalized pairKey, foodA/foodB references, and nationality snapshot
-    - Define comments table with pairKey, content, and nationality snapshot
+    - Define votes table with normalized pairKey, foodLowId/foodHighId, presentedLeftId/presentedRightId, result, and winnerFoodId
+    - Define comments table with pairKey, result, winnerFoodId, and content
     - Add composite unique index on votes table (user_id, pair_key) to prevent duplicate voting
-    - Implement pairKey normalization utility: min(foodA,foodB)+'_'+max(foodA,foodB)
-    - Generate and apply database migrations using Drizzle Kit (drizzle-kit)
+    - Implement pairKey normalization utility: min(foodId1,foodId2)+'_'+max(foodId1,foodId2)
+    - Generate and apply database migrations using Drizzle Kit
     - _Requirements: 7.1, 7.2, 7.3, 4.6_
 
 - [ ] 3. Implement core ELO calculation system
@@ -40,37 +41,37 @@
 
   - [ ] 3.2 Implement vote processing with ELO updates and concurrency control
     - Create vote recording service with D1 database transactions
-    - Integrate ELO calculation with vote processing
-    - Handle skip votes (no ELO impact) vs scoring votes
+    - Integrate ELO calculation with vote processing using result and winnerFoodId
+    - Handle skip votes (no ELO impact) vs scoring votes (win/tie)
     - Implement optimistic locking with updated_at conditional updates
     - Ensure atomic updates of food ratings and vote records with retry logic
-    - Add nationality snapshot capture at vote time
     - _Requirements: 1.5, 1.6, 1.7, 1.8_
 
 - [ ] 4. Build API endpoints with Hono framework
   - [ ] 4.1 Create food management endpoints
-    - Implement GET /api/foods/random-pair for food comparisons
+    - Implement GET /api/foods/random-pair returning { presentedLeft: Food, presentedRight: Food }
     - Implement GET /api/foods/leaderboard for rankings display
     - Add proper error handling and response formatting
     - Include data validation and sanitization
     - _Requirements: 1.1, 2.1, 2.2_
 
   - [ ] 4.2 Create voting system endpoints
-    - Implement POST /api/votes for recording user selections with pairKey normalization
-    - Implement GET /api/votes/stats/:pairKey for vote statistics with access control
-    - Add nationality-based vote breakdown calculations using nationality snapshots
+    - Implement POST /api/votes accepting { pairKey, foodLowId, foodHighId, presentedLeftId, presentedRightId, result, winnerFoodId }
+    - Implement GET /api/votes/stats/:pairKey returning { totalVotes, countsByFoodId, tieCount, skipCount, percentageByFoodId, tiePercentage, nationalityBreakdown }
+    - Add nationality-based vote breakdown by joining with user.nationality at query time with minimum group size privacy (N ≥ 5)
+    - Handle (user_id, pair_key) unique constraint violations with 409 Conflict response
+    - Implement optimistic locking retry logic (max 3 retries, backoff 50ms → 100ms → 200ms)
+    - Exclude skip votes from ELO and percentage calculations
     - Integrate with Better-auth session management
-    - Add composite unique constraint checking to prevent duplicate votes on same pairKey
     - Implement Zod validation for all request/response schemas
     - _Requirements: 1.5, 1.6, 1.7, 1.8, 4.1, 4.2, 4.6, 5.1, 5.2, 5.3_
 
   - [ ] 4.3 Create comments system endpoints
-    - Implement POST /api/comments for comment creation with pairKey
-    - Implement GET /api/comments/:pairKey for comment retrieval with access control
-    - Add content validation, sanitization, and length limits for comments
+    - Implement POST /api/comments accepting { pairKey, result, winnerFoodId, content }
+    - Implement GET /api/comments/:pairKey returning Comment[] with nationality from user profile via join
+    - Add content validation (plain text, max 280 characters), sanitization, and XSS prevention
     - Ensure proper user association through Better-auth sessions
     - Add access control to verify user has voted on pairKey before showing comments
-    - Implement nationality snapshot capture at comment time
     - _Requirements: 3.1, 3.2, 3.3, 4.3, 4.4, 4.5, 4.6_
 
 - [ ] 5. Develop React frontend with TanStack Router and Query
@@ -84,24 +85,25 @@
 
   - [ ] 5.2 Create TanStack Query hooks and API layer
     - Create custom hooks for food data fetching (useFoodPair, useLeaderboard)
-    - Implement mutation hooks for voting and comments with conservative invalidation approach
-    - Set up query invalidation and refetch strategies (avoid optimistic updates initially)
-    - Add error handling and loading states for all queries
+    - Implement mutation hooks for voting and comments with conservative invalidation approach (no optimistic updates in v1)
+    - Set up targeted query invalidation: invalidateQueries(['votes', 'stats', pairKey]) for specific pair stats
+    - Add error handling and loading states for all queries with proper error code handling (400/401/403/409)
     - Implement pairKey-based query keys for consistent caching
-    - Update useVoteStats hook to accept pairKey parameter instead of separate food IDs
+    - Update API calls to use normalized data structure (foodLowId/foodHighId, result, winnerFoodId)
     - _Requirements: 1.1, 2.3, 4.1, 4.2, 5.1, 5.2_
 
   - [ ] 5.3 Build food comparison interface
-    - Create FoodComparison component with two food display using TanStack Query
+    - Create FoodComparison component displaying presentedLeft and presentedRight foods
     - Implement primary selection buttons for each food item
     - Add expandable "More options" UI for tie/skip selections
-    - Handle user selections with invalidation-based refresh and navigation to results
+    - Handle user selections by normalizing food IDs and determining result/winnerFoodId
+    - Navigate to results after successful vote submission
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7_
 
   - [ ] 5.4 Create results and feedback interface
     - Build Results component showing vote percentages with pairKey-based access control
-    - Display nationality breakdown using nationality snapshots when sufficient data available
-    - Implement comment input with nationality selector and content validation
+    - Display nationality breakdown using current user.nationality via join queries
+    - Implement comment input without nationality selector (nationality from user profile)
     - Show recent comments for the specific pairKey (only after user has voted)
     - Add "Continue" button for next comparison
     - Implement route-level access control to only show results after user votes on that pairKey
@@ -114,35 +116,39 @@
     - Add responsive design for mobile and desktop viewing
     - _Requirements: 2.1, 2.2, 2.3_
 
-- [ ] 6. Integrate authentication and session management
+- [ ] 6. Integrate authentication and user profile management
   - [ ] 6.1 Implement anonymous user flow with EnsureSession pattern
     - Set up EnsureSession component to wrap RouterProvider for automatic anonymous session creation
-    - Handle nationality selection and session updates through better-auth
-    - Ensure proper session persistence across page reloads
+    - Handle session persistence across page reloads
     - Test anonymous user voting and commenting functionality
-    - Implement first-time user nationality prompt after initial vote/comment
-    - _Requirements: 6.1, 6.2, 6.3, 6.4_
+    - _Requirements: 6.1, 6.2, 6.4_
 
-  - [ ] 6.2 Add nationality tracking and analytics
-    - Implement nationality selector UI component
-    - Add nationality data to vote and comment submissions
-    - Create analytics for nationality-based voting patterns
+  - [ ] 6.2 Create user profile component for nationality management
+    - Implement User Profile component with optional nationality setting
+    - Add nationality update functionality through Better-auth API
+    - Create POST /api/auth/update-nationality endpoint
+    - Ensure nationality changes are reflected in future analytics
+    - _Requirements: 6.1, 6.2, 6.3, 6.5, 6.6_
+
+  - [ ] 6.3 Implement nationality-based analytics
+    - Create analytics queries that join votes/comments with user.nationality
     - Display nationality breakdowns in results interface
-    - _Requirements: 3.4, 3.5, 4.2, 4.4, 5.3, 6.2, 6.3_
+    - Handle cases where users don't have nationality set
+    - Document that nationality changes affect historical statistics
+    - _Requirements: 3.4, 3.5, 4.2, 4.4, 5.3, 6.3, 6.5, 6.6_
 
 - [ ] 7. Seed database with Korean food data
   - Create comprehensive list of popular Korean foods with descriptions
-  - Source high-quality food images and optimize for web delivery
-  - Implement database seeding script with initial ELO scores
+  - Source high-quality food images and host under public/ or external CDN for v1 (consider Cloudflare Images in Phase 2)
+  - Implement database seeding script with initial ELO scores (1200)
   - Add food data validation and duplicate prevention
   - _Requirements: 7.1, 7.2_
 
 - [ ] 8. Add error handling and validation
   - [ ] 8.1 Implement comprehensive input validation
-    - Add request validation for all API endpoints
-    - Implement content sanitization for comments
-    - Add rate limiting to prevent abuse
-    - Create proper error response formatting
+    - Add Zod request validation for all API endpoints using normalized data structure
+    - Implement content sanitization for comments (XSS prevention, max 280 characters)
+    - Create proper error response formatting with standard HTTP codes (400/401/403/409)
     - _Requirements: All requirements - data integrity_
 
   - [ ] 8.2 Add error boundaries and user feedback
@@ -152,16 +158,14 @@
     - Add user-friendly error messages for common scenarios
     - _Requirements: All requirements - user experience_
 
-- [ ] 9. Optimize performance and add caching
+- [ ] 9. (Phase 2) Performance optimization and caching
   - Implement Cloudflare KV caching for leaderboard data with 30-60s TTL
   - Add Workers Cache API (caches.default) for API response caching
-  - Consider Cloudflare Images for optimized image delivery
-  - Optimize database queries with proper pairKey indexing
-  - Add response compression and caching headers
-  - Implement cache invalidation on vote mutations for KV and Workers Cache
-  - Set appropriate Cache-Control headers on GET endpoints
+  - Design and implement cache invalidation strategy (leaderboard, stats) on vote mutations
   - Implement rate limiting using KV counters or Durable Objects
-  - _Requirements: 2.3 - real-time updates, performance optimization_
+  - Consider Cloudflare Images for optimized image delivery
+  - Add response compression and caching headers
+  - _Requirements: Phase 2 - performance optimization for high traffic_
 
 - [ ] 10. Deploy and configure production environment
   - Configure Cloudflare Workers deployment with static assets

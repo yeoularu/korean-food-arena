@@ -37,11 +37,11 @@ The Korean Food ELO Ranking System is a web application where users can view two
 
 #### Acceptance Criteria
 
-1. WHEN a user selects a food item THEN the system SHALL show the selection results and provide a comment input field and nationality selector
-2. WHEN a user writes and submits a comment THEN the system SHALL store the comment anonymously with the selection data and optional nationality
+1. WHEN a user selects a food item THEN the system SHALL show the selection results and provide a comment input field
+2. WHEN a user writes and submits a comment THEN the system SHALL store the comment anonymously with the selection data
 3. WHEN a comment is submitted THEN the system SHALL make it publicly visible to other users who have made selections
-4. WHEN a user does not write a comment THEN the system SHALL still allow nationality selection for vote tracking
-5. WHEN a user does not provide nationality THEN the system SHALL record the selection without nationality data
+4. WHEN nationality is set in user profile THEN the system SHALL include nationality context with comments and votes
+5. WHEN a user does not provide nationality in profile THEN the system SHALL record selections and comments without nationality data
 
 ### Requirement 4
 
@@ -50,11 +50,12 @@ The Korean Food ELO Ranking System is a web application where users can view two
 #### Acceptance Criteria
 
 1. WHEN a user completes a selection THEN the system SHALL display the current vote percentages for that food pairing
-2. WHEN selection results are shown THEN the system SHALL display vote breakdown by nationality if available
+2. WHEN selection results are shown THEN the system SHALL display vote breakdown by nationality if available with minimum group size (N ≥ 5), smaller groups aggregated as 'Other'
 3. WHEN selection results are shown THEN the system SHALL display recent comments related to that specific food comparison
 4. WHEN comments are displayed THEN the system SHALL show which food was selected along with the comment content and nationality (if provided)
 5. WHEN comments are displayed THEN the system SHALL show them anonymously without exposing user personal information beyond nationality
 6. WHEN a user has not made a selection for a food pairing THEN the system SHALL NOT display results or comments for that pairing
+7. WHEN nationality data is used THEN the system SHALL use ISO 3166-1 alpha-2 country codes with 'unknown' for unspecified
 
 ### Requirement 5
 
@@ -62,8 +63,8 @@ The Korean Food ELO Ranking System is a web application where users can view two
 
 #### Acceptance Criteria
 
-1. WHEN a user makes a selection THEN the system SHALL immediately show a results screen with vote percentages
-2. WHEN the results screen is displayed THEN the system SHALL show how many people chose each food in that specific pairing
+1. WHEN a user makes any selection (win/tie/skip) THEN the system SHALL immediately show a results screen with vote percentages
+2. WHEN the results screen is displayed THEN the system SHALL show how many people chose each food in that specific pairing with skip votes excluded from percentage calculations
 3. WHEN the results screen is displayed THEN the system SHALL show vote distribution by nationality if sufficient data is available
 4. WHEN the results screen is displayed THEN the system SHALL show recent comments from other users who made selections on this pairing
 5. WHEN the results screen is shown THEN the system SHALL provide a "Continue" or "Next Comparison" button to proceed
@@ -71,16 +72,16 @@ The Korean Food ELO Ranking System is a web application where users can view two
 
 ### Requirement 6
 
-**User Story:** As a user, I want to optionally provide my nationality when participating, so that my cultural background can add context to voting patterns and discussions.
+**User Story:** As a user, I want to optionally provide my nationality in my profile, so that my cultural background can add context to voting patterns and discussions.
 
 #### Acceptance Criteria
 
-1. WHEN a user makes their first selection or comment THEN the system SHALL optionally prompt for nationality selection
-2. WHEN nationality is provided THEN the system SHALL store it with the user's session for future votes and comments
-3. WHEN nationality data is collected THEN the system SHALL capture a snapshot of the user's nationality at the time of each vote and comment
-4. WHEN nationality data is used for analytics THEN the system SHALL use the nationality snapshot from the time of the vote/comment, not the current user nationality
-5. WHEN a user chooses not to provide nationality THEN the system SHALL allow full participation without this information
-6. WHEN a user changes their nationality THEN the system SHALL not retroactively change past vote/comment nationality data
+1. WHEN a user accesses their profile or settings THEN the system SHALL provide an optional nationality field
+2. WHEN nationality is provided in profile THEN the system SHALL use it for vote and comment analytics
+3. WHEN nationality data is used for analytics THEN the system SHALL use the current user nationality from the profile
+4. WHEN a user chooses not to provide nationality THEN the system SHALL allow full participation without this information
+5. WHEN a user changes their nationality THEN the system SHALL use the updated nationality for future analytics
+6. WHEN nationality is changed THEN historical statistics may reflect the updated value rather than historical snapshots
 
 ### Requirement 7
 
