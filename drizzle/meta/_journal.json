@@ -8,6 +8,20 @@
       "when": 1755271559148,
       "tag": "0000_steady_clint_barton",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1755949227277,
+      "tag": "0001_late_centennial",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1755949628407,
+      "tag": "0002_woozy_shooting_star",
+      "breakpoints": true
     }
   ]
 }

@@ -15,6 +15,7 @@ export const user = sqliteTable('user', {
     .$defaultFn(() => /* @__PURE__ */ new Date())
     .notNull(),
   isAnonymous: integer('is_anonymous', { mode: 'boolean' }),
+  nationality: text('nationality').default('unknown'),
 })
 
 export const session = sqliteTable('session', {

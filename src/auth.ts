@@ -3,6 +3,17 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { anonymous } from 'better-auth/plugins'
 
 export const options: BetterAuthOptions = {
+  user: {
+    additionalFields: {
+      nationality: {
+        type: 'string',
+        required: false, // Optional field - users can skip nationality selection
+        input: true, // Allow users to set nationality
+        // Standard: ISO 3166-1 alpha-2 country codes, 'unknown' for unspecified
+        defaultValue: 'unknown',
+      },
+    },
+  },
   plugins: [anonymous()],
 }
 

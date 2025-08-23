@@ -317,16 +317,11 @@ export const auth = betterAuth({
         required: false, // Optional field - users can skip nationality selection
         input: true, // Allow users to set nationality
         // Standard: ISO 3166-1 alpha-2 country codes, 'unknown' for unspecified
+        defaultValue: 'unknown',
       },
     },
   },
-  plugins: [
-    anonymous({
-      emailDomainName: 'korean-food-elo.com',
-      generateName: () =>
-        `Anonymous User ${Math.random().toString(36).substr(2, 9)}`,
-    }),
-  ],
+  plugins: [anonymous()],
 })
 
 // schema.ts - Custom tables (Better-auth tables are auto-generated)
