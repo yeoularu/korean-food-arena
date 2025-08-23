@@ -74,8 +74,8 @@
     - Add access control to verify user has voted on pairKey before showing comments
     - _Requirements: 3.1, 3.2, 3.3, 4.3, 4.4, 4.5, 4.6_
 
-- [ ] 5. Develop React frontend with TanStack Router and Query
-  - [ ] 5.1 Set up React application structure
+- [x] 5. Develop React frontend with TanStack Router and Query
+  - [x] 5.1 Set up React application structure
     - Initialize React SPA with TypeScript configuration
     - Configure TanStack Router for client-side routing
     - Set up TanStack Query with QueryClient and providers
@@ -83,7 +83,7 @@
     - Create base layout and navigation components
     - _Requirements: 1.1, 6.1_
 
-  - [ ] 5.2 Create TanStack Query hooks and API layer
+  - [x] 5.2 Create TanStack Query hooks and API layer
     - Create custom hooks for food data fetching (useFoodPair, useLeaderboard)
     - Implement mutation hooks for voting and comments with conservative invalidation approach (no optimistic updates in v1)
     - Set up targeted query invalidation: invalidateQueries(['votes', 'stats', pairKey]) for specific pair stats
@@ -92,7 +92,7 @@
     - Update API calls to use normalized data structure (foodLowId/foodHighId, result, winnerFoodId)
     - _Requirements: 1.1, 2.3, 4.1, 4.2, 5.1, 5.2_
 
-  - [ ] 5.3 Build food comparison interface
+  - [x] 5.3 Build food comparison interface
     - Create FoodComparison component displaying presentedLeft and presentedRight foods
     - Implement primary selection buttons for each food item
     - Add expandable "More options" UI for tie/skip selections
@@ -100,7 +100,7 @@
     - Navigate to results after successful vote submission
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7_
 
-  - [ ] 5.4 Create results and feedback interface
+  - [x] 5.4 Create results and feedback interface
     - Build Results component showing vote percentages with pairKey-based access control
     - Display nationality breakdown using current user.nationality via join queries
     - Implement comment input without nationality selector (nationality from user profile)
@@ -109,7 +109,7 @@
     - Implement route-level access control to only show results after user votes on that pairKey
     - _Requirements: 3.1, 4.1, 4.2, 4.3, 4.4, 4.6, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6_
 
-  - [ ] 5.5 Implement leaderboard display
+  - [x] 5.5 Implement leaderboard display
     - Create Leaderboard component with sortable food rankings using TanStack Query
     - Display food photos, names, ELO scores, and positions
     - Implement real-time score updates with automatic refetching and proper loading states

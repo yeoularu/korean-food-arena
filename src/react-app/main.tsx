@@ -12,6 +12,7 @@ import { routeTree } from './routeTree.gen'
 
 import './styles.css'
 import { ThemeProvider } from './components/theme-provider.tsx'
+import { EnsureSession } from './components/EnsureSession.tsx'
 
 // Create a new router instance
 
@@ -56,7 +57,9 @@ if (rootElement && !rootElement.innerHTML) {
               ]}
             />
           )}
-          <RouterProvider router={router} />
+          <EnsureSession>
+            <RouterProvider router={router} />
+          </EnsureSession>
         </TanStackQueryProvider.Provider>
       </ThemeProvider>
     </StrictMode>,
