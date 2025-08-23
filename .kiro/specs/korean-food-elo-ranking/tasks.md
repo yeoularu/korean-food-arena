@@ -31,15 +31,15 @@
     - Generate and apply database migrations using Drizzle Kit
     - _Requirements: 7.1, 7.2, 7.3, 4.6_
 
-- [ ] 3. Implement core ELO calculation system
-  - [ ] 3.1 Create ELO calculation service
+- [x] 3. Implement core ELO calculation system
+  - [x] 3.1 Create ELO calculation service
     - Implement standard ELO algorithm with K-factor of 32
     - Handle win/loss/tie scenarios for rating updates
     - Create utility functions for expected score calculations
     - Write comprehensive unit tests for ELO calculations
     - _Requirements: 1.8, 7.3_
 
-  - [ ] 3.2 Implement vote processing with ELO updates and concurrency control
+  - [x] 3.2 Implement vote processing with ELO updates and concurrency control
     - Create vote recording service with D1 database transactions
     - Integrate ELO calculation with vote processing using result and winnerFoodId
     - Handle skip votes (no ELO impact) vs scoring votes (win/tie)
