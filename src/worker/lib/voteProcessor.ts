@@ -1,6 +1,6 @@
 import { eq, and } from 'drizzle-orm'
 import type { DrizzleD1Database } from 'drizzle-orm/d1'
-import { food, vote, type Food, type Vote } from '../db/schema'
+import { food, vote, type Vote } from '../db/schema'
 import { ELOCalculator, type MatchResult } from './elo'
 import { createPairKey, normalizeFoodIds } from './pairKey'
 
@@ -124,23 +124,19 @@ export class VoteProcessor {
       const food2 = foods.find((f) => f.id === voteRequest.foodHighId)!
 
       // Calculate new ELO scores if this is not a skip vote
-      let newScores: { [foodId: string]: number } = {}
+      const newScores: { [foodId: string]: number } = {}
 
       if (voteRequest.result !== 'skip') {
         // Map vote result to ELO calculation
         let eloResult1: MatchResult
-        let eloResult2: MatchResult
 
         if (voteRequest.result === 'tie') {
           eloResult1 = 'tie'
-          eloResult2 = 'tie'
         } else if (voteRequest.result === 'win') {
           if (voteRequest.winnerFoodId === voteRequest.foodLowId) {
             eloResult1 = 'win'
-            eloResult2 = 'loss'
           } else if (voteRequest.winnerFoodId === voteRequest.foodHighId) {
             eloResult1 = 'loss'
-            eloResult2 = 'win'
           } else {
             const invalidError = new Error(
               'Winner food ID does not match either food in the pair',
@@ -179,6 +175,7 @@ export class VoteProcessor {
           .where(
             and(eq(food.id, food1.id), eq(food.updatedAt, food1.updatedAt!)),
           )
+          .returning()
 
         const food2UpdateResult = await tx
           .update(food)
@@ -190,12 +187,10 @@ export class VoteProcessor {
           .where(
             and(eq(food.id, food2.id), eq(food.updatedAt, food2.updatedAt!)),
           )
+          .returning()
 
         // Check if optimistic locking failed (no rows updated)
-        if (
-          food1UpdateResult.changes === 0 ||
-          food2UpdateResult.changes === 0
-        ) {
+        if (food1UpdateResult.length === 0 || food2UpdateResult.length === 0) {
           const concurrencyError = new Error(
             'Concurrent modification detected, retrying...',
           ) as VoteProcessingError
@@ -215,6 +210,7 @@ export class VoteProcessor {
           .where(
             and(eq(food.id, food1.id), eq(food.updatedAt, food1.updatedAt!)),
           )
+          .returning()
 
         const food2UpdateResult = await tx
           .update(food)
@@ -225,12 +221,10 @@ export class VoteProcessor {
           .where(
             and(eq(food.id, food2.id), eq(food.updatedAt, food2.updatedAt!)),
           )
+          .returning()
 
         // Check if optimistic locking failed
-        if (
-          food1UpdateResult.changes === 0 ||
-          food2UpdateResult.changes === 0
-        ) {
+        if (food1UpdateResult.length === 0 || food2UpdateResult.length === 0) {
           const concurrencyError = new Error(
             'Concurrent modification detected, retrying...',
           ) as VoteProcessingError
@@ -367,7 +361,7 @@ export class VoteProcessor {
   /**
    * Check if an error should not be retried
    */
-  private isNonRetryableError(error: any): boolean {
+  private isNonRetryableError(error: unknown): boolean {
     if (error && typeof error === 'object' && 'code' in error) {
       const errorCode = (error as VoteProcessingError).code
       return ['DUPLICATE_VOTE', 'FOOD_NOT_FOUND', 'INVALID_VOTE'].includes(

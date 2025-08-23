@@ -47,15 +47,15 @@
     - Ensure atomic updates of food ratings and vote records with retry logic
     - _Requirements: 1.5, 1.6, 1.7, 1.8_
 
-- [ ] 4. Build API endpoints with Hono framework
-  - [ ] 4.1 Create food management endpoints
+- [x] 4. Build API endpoints with Hono framework
+  - [x] 4.1 Create food management endpoints
     - Implement GET /api/foods/random-pair returning { presentedLeft: Food, presentedRight: Food }
     - Implement GET /api/foods/leaderboard for rankings display
     - Add proper error handling and response formatting
     - Include data validation and sanitization
     - _Requirements: 1.1, 2.1, 2.2_
 
-  - [ ] 4.2 Create voting system endpoints
+  - [x] 4.2 Create voting system endpoints
     - Implement POST /api/votes accepting { pairKey, foodLowId, foodHighId, presentedLeftId, presentedRightId, result, winnerFoodId }
     - Implement GET /api/votes/stats/:pairKey returning { totalVotes, countsByFoodId, tieCount, skipCount, percentageByFoodId, tiePercentage, nationalityBreakdown }
     - Add nationality-based vote breakdown by joining with user.nationality at query time with minimum group size privacy (N ≥ 5)
@@ -66,7 +66,7 @@
     - Implement Zod validation for all request/response schemas
     - _Requirements: 1.5, 1.6, 1.7, 1.8, 4.1, 4.2, 4.6, 5.1, 5.2, 5.3_
 
-  - [ ] 4.3 Create comments system endpoints
+  - [x] 4.3 Create comments system endpoints
     - Implement POST /api/comments accepting { pairKey, result, winnerFoodId, content }
     - Implement GET /api/comments/:pairKey returning Comment[] with nationality from user profile via join
     - Add content validation (plain text, max 280 characters), sanitization, and XSS prevention

@@ -81,7 +81,8 @@ describe('VoteProcessor', () => {
 
       mockTx.update.mockReturnValue({
         set: vi.fn().mockReturnThis(),
-        where: vi.fn().mockResolvedValue({ changes: 1 }), // Successful update
+        where: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([{ id: 'food1' }]), // Successful update
       })
 
       mockTx.insert.mockReturnValue({
@@ -128,7 +129,8 @@ describe('VoteProcessor', () => {
 
       mockTx.update.mockReturnValue({
         set: vi.fn().mockReturnThis(),
-        where: vi.fn().mockResolvedValue({ changes: 1 }), // Successful update
+        where: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([{ id: 'food1' }]), // Successful update
       })
 
       mockTx.insert.mockReturnValue({
@@ -176,7 +178,8 @@ describe('VoteProcessor', () => {
 
       mockTx.update.mockReturnValue({
         set: vi.fn().mockReturnThis(),
-        where: vi.fn().mockResolvedValue({ changes: 1 }), // Successful update
+        where: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([{ id: 'food1' }]), // Successful update
       })
 
       mockTx.insert.mockReturnValue({
@@ -262,11 +265,12 @@ describe('VoteProcessor', () => {
         // Mock both food updates
         mockTx.update.mockReturnValue({
           set: vi.fn().mockReturnThis(),
-          where: vi.fn().mockImplementation(() => {
+          where: vi.fn().mockReturnThis(),
+          returning: vi.fn().mockImplementation(() => {
             if (transactionAttempt <= 2) {
-              return Promise.resolve({ changes: 0 }) // Simulate concurrency conflict
+              return Promise.resolve([]) // Simulate concurrency conflict (no rows updated)
             }
-            return Promise.resolve({ changes: 1 }) // Success on third attempt
+            return Promise.resolve([{ id: 'food1' }]) // Success on third attempt
           }),
         })
 
@@ -309,7 +313,8 @@ describe('VoteProcessor', () => {
 
       mockTx.update.mockReturnValue({
         set: vi.fn().mockReturnThis(),
-        where: vi.fn().mockResolvedValue({ changes: 0 }), // Always fail
+        where: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([]), // Always fail (no rows updated)
       })
 
       await expect(voteProcessor.processVote(baseVoteRequest)).rejects.toThrow(
@@ -452,7 +457,8 @@ describe('VoteProcessor', () => {
 
       mockTx.update.mockReturnValue({
         set: vi.fn().mockReturnThis(),
-        where: vi.fn().mockResolvedValue({ changes: 1 }), // Successful update
+        where: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([{ id: 'food1' }]), // Successful update
       })
 
       mockTx.insert.mockReturnValue({
@@ -499,7 +505,8 @@ describe('VoteProcessor', () => {
 
       mockTx.update.mockReturnValue({
         set: vi.fn().mockReturnThis(),
-        where: vi.fn().mockResolvedValue({ changes: 1 }), // Successful update
+        where: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([{ id: 'food1' }]), // Successful update
       })
 
       mockTx.insert.mockReturnValue({
