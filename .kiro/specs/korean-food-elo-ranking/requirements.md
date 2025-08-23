@@ -37,11 +37,12 @@ The Korean Food ELO Ranking System is a web application where users can view two
 
 #### Acceptance Criteria
 
-1. WHEN a user selects a food item THEN the system SHALL show the selection results and provide a comment input field
-2. WHEN a user writes and submits a comment THEN the system SHALL store the comment anonymously with the selection data
-3. WHEN a comment is submitted THEN the system SHALL make it publicly visible to other users who have made selections
-4. WHEN nationality is set in user profile THEN the system SHALL include nationality context with comments and votes
-5. WHEN a user does not provide nationality in profile THEN the system SHALL record selections and comments without nationality data
+1. WHEN a user selects a food item (win or tie) THEN the system SHALL show the selection results and provide a comment input field
+2. WHEN a user selects "Skip/Don't know" THEN the system SHALL NOT provide a comment input field (skip votes cannot generate comments)
+3. WHEN a user writes and submits a comment THEN the system SHALL store the comment anonymously with the selection data
+4. WHEN a comment is submitted THEN the system SHALL make it publicly visible to other users who have made selections
+5. WHEN nationality is set in user profile THEN the system SHALL include nationality context with comments and votes
+6. WHEN a user does not provide nationality in profile THEN the system SHALL record selections and comments without nationality data
 
 ### Requirement 4
 

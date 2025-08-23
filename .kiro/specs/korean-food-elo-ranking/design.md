@@ -6,6 +6,8 @@ The Korean Food ELO Ranking System is a web application that allows users to com
 
 **v1 Scope**: This document focuses on core functionality (anonymous sessions, random pair comparisons, voting, results/comments, leaderboard). Advanced features like caching (Cloudflare KV/Workers Cache), cache invalidation, and rate limiting are excluded from v1 and will be implemented in Phase 2.
 
+**Constants**: MIN_GROUP_SIZE = 5 (minimum nationality group size for privacy protection)
+
 ## Architecture
 
 ### Technology Stack
@@ -27,12 +29,13 @@ graph TB
     E --> D
 
     subgraph "D1 Database Tables"
-        F[Foods - Custom]
-        G[Votes - Custom]
-        H[Comments - Custom]
+        F[Food - Custom]
+        G[Vote - Custom]
+        H[Comment - Custom]
         I[User - Better-auth]
         J[Session - Better-auth]
         K[Account - Better-auth]
+        L[Verification - Better-auth]
     end
 
     D --> F
@@ -41,6 +44,7 @@ graph TB
     D --> I
     D --> J
     D --> K
+    D --> L
 ```
 
 ## Components and Interfaces
@@ -70,6 +74,7 @@ graph TB
 - Food photos, names, scores, and rankings
 - Real-time score updates with automatic refetching
 - Conservative invalidation-based updates (optimistic updates as future enhancement)
+- Note: Secondary sort uses totalVotes which includes skip votes to reflect sample size
 
 #### 4. Navigation Component
 
@@ -164,12 +169,12 @@ const useOptimisticVoteMutation = () =>
 GET /api/foods/random-pair
 // Returns two random foods for comparison
 // Response: { presentedLeft: Food, presentedRight: Food }
-// Policy: Avoids recently presented pairs (v1: client-side tracking via memory/localStorage; backend stateless). Left/right display order is randomized.
+// Policy: Avoids recently presented pairs (v1: client-side tracking via memory/localStorage with suggested window of 10 recent pairs or 5 minutes; backend stateless). Left/right display order is randomized.
 
 GET /api/foods/leaderboard
 // Returns all foods sorted by ELO score
 // Response: Food[] (includes id, name, imageUrl, eloScore, totalVotes, createdAt, updatedAt)
-// Sorting: ELO score DESC, then totalVotes DESC, then name ASC for tie-breaking
+// Sorting: ELO score DESC, then totalVotes DESC (totalVotes includes skip votes to reflect sample size), then name ASC for tie-breaking (lexicographic order for consistent sorting)
 ```
 
 #### Voting System
@@ -195,11 +200,27 @@ GET /api/votes/stats/:pairKey
 
 //   countryCodeStandard: 'ISO-3166-1-alpha-2'
 // }
-// Computation note: percentageByFoodId sum to (100% - tiePercentage); skip votes excluded from denominator. Three percentages (winA, winB, tie) sum to 100%.
-// Privacy: Nationality breakdown only shown for groups with minimum size (N ≥ 5), smaller groups aggregated as 'Other'.
+// Computation note: Skip votes excluded from percentage calculations. Win/tie percentages calculated from non-skip votes only. (winA + winB + tie) = 100%.
+// Privacy: Nationality breakdown only shown for groups with minimum size (MIN_GROUP_SIZE = 5), smaller groups aggregated as 'Other'. Individual comments from users in small nationality groups also display nationality as 'Other'.
 // Computation note: Calculated by joining votes.user_id -> user.nationality at query time.
 // Caveat: If a user changes nationality, historical breakdown will reflect the latest value.
 // Note: Returns 403 if user hasn't voted on this pairKey (Requirement 4.6)
+
+```typescript
+// VoteStats response shape (reference)
+interface VoteStats {
+  totalVotes: number
+  countsByFoodId: Record<string, number>
+  tieCount: number
+  skipCount: number
+  // Percentages computed from non-skip votes only
+  percentageByFoodId: Record<string, number>
+  tiePercentage: number
+  nationalityBreakdown: Record<string, {
+    byFoodId: Record<string, number>
+    tiePercentage: number
+  }>
+}
 ```
 
 #### Comments System
@@ -217,7 +238,7 @@ GET /api/comments/:pairKey
 // Query params: ?limit=20 (default), ?cursor for pagination
 // Response: Comment[] with result, winnerFoodId, content, timestamp, and nationality (from user profile via join)
 // Sorting: created_at DESC (most recent first)
-// Privacy: Compute nationality counts per pairKey; if nationality count < 5, return 'Other' for those comments; recomputed per request
+// Privacy: Compute nationality counts per pairKey; if nationality count < MIN_GROUP_SIZE (5), return 'Other' for individual comment nationality display; recomputed per request
 // Note: Returns 403 if user hasn't voted on this pairKey (Requirement 4.6)
 ```
 
@@ -244,7 +265,7 @@ POST /api/auth/update-nationality
 #### Frontend Session Management Pattern
 
 ```typescript
-// EnsureSession component to guarantee anonymous session on first visit
+// Pseudocode example: adapt to actual auth client hooks. EnsureSession component to guarantee anonymous session on first visit
 function EnsureSession({ children }: { children: React.ReactNode }) {
   const { data: session, isLoading } = useSession()
   const signInAnonymous = useSignInAnonymous()
@@ -312,47 +333,47 @@ export const auth = betterAuth({
 import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core'
 import { sql } from 'drizzle-orm'
 
-export const foods = sqliteTable('foods', {
+export const food = sqliteTable('food', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   imageUrl: text('image_url').notNull(),
   eloScore: integer('elo_score').default(1200).notNull(),
-  totalVotes: integer('total_votes').default(0).notNull(),
-  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`), // ISO 8601 TEXT format
-  updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`), // ISO 8601 TEXT format
+  totalVotes: integer('total_votes').default(0).notNull(), // Total number of votes including skip votes
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`), // ISO 8601 format
+  updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`), // ISO 8601 format
 })
 
-export const votes = sqliteTable('votes', {
+export const vote = sqliteTable('vote', {
   id: text('id').primaryKey(), // Use cuid2 or ulid for better performance
   pairKey: text('pair_key').notNull(), // Normalized: min(foodA,foodB)+'_'+max(foodA,foodB)
-  foodLowId: text('food_low_id').references(() => foods.id), // Normalized min ID
-  foodHighId: text('food_high_id').references(() => foods.id), // Normalized max ID
-  presentedLeftId: text('presented_left_id').references(() => foods.id), // UI display order
-  presentedRightId: text('presented_right_id').references(() => foods.id), // UI display order
+  foodLowId: text('food_low_id').references(() => food.id), // Normalized min ID
+  foodHighId: text('food_high_id').references(() => food.id), // Normalized max ID
+  presentedLeftId: text('presented_left_id').references(() => food.id), // UI display order
+  presentedRightId: text('presented_right_id').references(() => food.id), // UI display order
   result: text('result', {
     enum: ['win', 'tie', 'skip'],
   }).notNull(),
-  winnerFoodId: text('winner_food_id').references(() => foods.id), // Only set when result='win'
-  userId: text('user_id').notNull(), // References better-auth user table (always created via anonymous plugin)
-  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+  winnerFoodId: text('winner_food_id').references(() => food.id), // Only set when result='win'
+  userId: text('user_id').notNull(), // References better-auth user table (table name: 'user')
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`), // ISO 8601 TEXT format
 })
 
-export const comments = sqliteTable('comments', {
+export const comment = sqliteTable('comment', {
   id: text('id').primaryKey(), // Use cuid2 or ulid for better performance
   pairKey: text('pair_key').notNull(), // Same normalized pairKey as votes
   result: text('result', {
     enum: ['win', 'tie'],
   }).notNull(), // Skip votes don't generate comments
-  winnerFoodId: text('winner_food_id').references(() => foods.id), // Only set when result='win'
+  winnerFoodId: text('winner_food_id').references(() => food.id), // Only set when result='win'
   content: text('content').notNull(),
-  userId: text('user_id').notNull(), // References better-auth user table (always created via anonymous plugin)
-  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+  userId: text('user_id').notNull(), // References better-auth user table (table name: 'user')
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`), // ISO 8601 TEXT format
 })
 
 // Type inference
-export type Food = typeof foods.$inferSelect
-export type Vote = typeof votes.$inferSelect
-export type Comment = typeof comments.$inferSelect
+export type Food = typeof food.$inferSelect
+export type Vote = typeof vote.$inferSelect
+export type Comment = typeof comment.$inferSelect
 // User type is inferred from better-auth with nationality field
 ```
 
@@ -362,10 +383,11 @@ export type Comment = typeof comments.$inferSelect
 
 ```sql
 -- D1 Database Schema (SQLite)
--- Note: Better-auth tables (user/users, session, account, verification) are auto-generated (verify exact table names)
+-- Note: Better-auth tables (user, session, account, verification) are auto-generated
+-- Note: Auth tables use integer(epoch) timestamps; custom tables use TEXT (ISO 8601) timestamps
 
--- Custom Foods table
-CREATE TABLE foods (
+-- Custom Food table
+CREATE TABLE food (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   image_url TEXT NOT NULL,
@@ -375,45 +397,49 @@ CREATE TABLE foods (
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP -- ISO 8601 format
 );
 
--- Custom Votes table
-CREATE TABLE votes (
+-- Custom Vote table
+CREATE TABLE vote (
   id TEXT PRIMARY KEY, -- Use cuid2() or ulid() for better performance
   pair_key TEXT NOT NULL, -- Normalized: min(food_low_id, food_high_id) + '_' + max(food_low_id, food_high_id)
-  food_low_id TEXT REFERENCES foods(id), -- Normalized min ID for domain logic
-  food_high_id TEXT REFERENCES foods(id), -- Normalized max ID for domain logic
-  presented_left_id TEXT REFERENCES foods(id), -- UI display order for bias analysis
-  presented_right_id TEXT REFERENCES foods(id), -- UI display order for bias analysis
+  food_low_id TEXT REFERENCES food(id), -- Normalized min ID for domain logic
+  food_high_id TEXT REFERENCES food(id), -- Normalized max ID for domain logic
+  presented_left_id TEXT REFERENCES food(id), -- UI display order for bias analysis
+  presented_right_id TEXT REFERENCES food(id), -- UI display order for bias analysis
   result TEXT CHECK (result IN ('win', 'tie', 'skip')) NOT NULL,
-  winner_food_id TEXT REFERENCES foods(id), -- Only set when result='win'
-  user_id TEXT NOT NULL REFERENCES user(id), -- Better-auth user table (always created via anonymous plugin)
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  winner_food_id TEXT REFERENCES food(id), -- Only set when result='win'
+  user_id TEXT NOT NULL REFERENCES user(id), -- Better-auth user table (table name: 'user')
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP -- ISO 8601 TEXT format
 );
 
--- Custom Comments table
-CREATE TABLE comments (
+-- Custom Comment table
+CREATE TABLE comment (
   id TEXT PRIMARY KEY, -- Use cuid2() or ulid() for better performance
   pair_key TEXT NOT NULL, -- Same normalized pairKey as votes
   result TEXT CHECK (result IN ('win', 'tie')) NOT NULL, -- Skip votes don't generate comments
-  winner_food_id TEXT REFERENCES foods(id), -- Only set when result='win'
+  winner_food_id TEXT REFERENCES food(id), -- Only set when result='win'
   content TEXT NOT NULL,
-  user_id TEXT NOT NULL REFERENCES user(id), -- Better-auth user table (always created via anonymous plugin)
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  user_id TEXT NOT NULL REFERENCES user(id), -- Better-auth user table (table name: 'user')
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP -- ISO 8601 TEXT format
 );
 
 -- Note: Nationality data is stored in the user table (Better-auth managed)
--- Statistics queries join votes/comments with user table to get current nationality
+-- Statistics queries join vote/comment with user table to get current nationality
 -- Caveat: If user changes nationality, historical statistics will reflect the updated value
 
 -- Indexes for performance
-CREATE INDEX idx_votes_pair_key ON votes(pair_key);
-CREATE INDEX idx_comments_pair_key ON comments(pair_key);
-CREATE INDEX idx_foods_elo ON foods(elo_score);
-CREATE INDEX idx_votes_created_at ON votes(created_at DESC);
-CREATE INDEX idx_comments_created_at ON comments(created_at DESC);
-CREATE INDEX idx_votes_user ON votes(user_id);
-CREATE INDEX idx_comments_user ON comments(user_id);
+CREATE INDEX idx_vote_pair_key ON vote(pair_key);
+CREATE INDEX idx_comment_pair_key ON comment(pair_key);
+CREATE INDEX idx_food_elo ON food(elo_score);
+// Composite index for leaderboard sorting optimization
+CREATE INDEX idx_food_leaderboard ON food(elo_score DESC, total_votes DESC);
+CREATE INDEX idx_vote_created_at ON vote(created_at DESC);
+CREATE INDEX idx_comment_created_at ON comment(created_at DESC);
+CREATE INDEX idx_vote_user ON vote(user_id);
+CREATE INDEX idx_comment_user ON comment(user_id);
 -- Composite unique index for preventing duplicate votes on same pairing (Requirement 4.6)
-CREATE UNIQUE INDEX idx_votes_user_pair ON votes(user_id, pair_key);
+CREATE UNIQUE INDEX idx_vote_user_pair ON vote(user_id, pair_key);
+-- Recommendation: leaderboard query optimization
+CREATE INDEX idx_food_elo_votes ON food(elo_score DESC, total_votes DESC);
 ```
 
 ## ELO Calculation System
@@ -466,13 +492,13 @@ class ELOCalculator {
 
 1. Receive vote from frontend with session validation
 2. Validate vote data and ensure user hasn't voted on this pairKey before (using unique constraint)
-3. **Result Mapping**: win (winner=winnerFoodId, loser=opposite), tie (0.5/0.5), skip (no ELO change)
+3. **Result Mapping**: API input ('win'|'tie'|'skip') → ELO calculation ('win'|'loss'|'tie'). For API 'win' result: winner gets 'win', loser gets 'loss'. For API 'tie': both get 'tie'. For API 'skip': no ELO change.
 4. **D1 Transaction Processing**:
    - Begin transaction
    - Query current ELO scores for both foods with `updated_at` timestamps
    - Calculate new ELO scores (skip votes don't affect ELO, ties count as 0.5 points each)
    - Update food records with conditional `WHERE updated_at = ?` and manual `updated_at = CURRENT_TIMESTAMP` to prevent race conditions
-   - Example: `UPDATE foods SET elo_score=?, total_votes=total_votes+1, updated_at=CURRENT_TIMESTAMP WHERE id=? AND updated_at=?`
+   - Example: `UPDATE food SET elo_score=?, total_votes=total_votes+1, updated_at=CURRENT_TIMESTAMP WHERE id=? AND updated_at=?`
    - If either food row update returns 0 rows, rollback and retry the whole transaction (optimistic locking: max 3 retries, backoff 50ms → 100ms → 200ms)
    - Insert vote record with normalized pairKey
    - Commit transaction
@@ -490,7 +516,7 @@ function createPairKey(foodLowId: string, foodHighId: string): string {
 }
 
 // Helper function to normalize food IDs for consistent pair representation
-// Note: foodLowId/foodHighId are lexicographic sort order, not related to ELO rating values
+// Note: foodLowId/foodHighId use lexicographic order (same as pairKey generation), not related to ELO rating values
 function normalizeFoodIds(foodId1: string, foodId2: string): { foodLowId: string, foodHighId: string } {
   const [min, max] = [foodId1, foodId2].sort()
   return { foodLowId: min, foodHighId: max }
@@ -512,8 +538,20 @@ This prevents duplicate entries for (A,B) vs (B,A) comparisons and ensures consi
 
 - Database connection failures with circuit breaker pattern
 - Invalid request data with detailed validation messages
-- Rate limiting to prevent abuse
 - Comprehensive logging for debugging
+- **Rate limiting** (Phase 2):
+  - **Cloudflare KV** with sliding window counters for IP/session-based limits
+  - **Durable Objects** for more complex rate limiting scenarios
+  - **Turnstile** integration for bot prevention
+- Prevent duplicate voting on same pairKey by same user (unique constraint)
+- Content length limits and profanity filtering for comments
+
+### Database Security
+
+- Parameterized queries to prevent SQL injection
+- Proper access controls and user permissions
+- Regular security updates and patches
+- Composite unique indexes to prevent data integrity issues
 
 ### Error Response Format
 
@@ -532,7 +570,7 @@ interface ErrorResponse {
 - **401 Unauthorized**: Missing or expired session
 - **403 Forbidden**: Access denied (user hasn't voted on this pairKey)
 - **409 Conflict**: Duplicate vote attempt on same pairKey
-- **429 Too Many Requests**: Rate limiting (Phase 2 implementation)
+- **429 Too Many Requests**: Rate limiting (**Phase 2** implementation)
 
 ## Testing Strategy
 
@@ -606,6 +644,8 @@ interface ErrorResponse {
 - Prevents users from being influenced by others' choices before making their own
 - Ensures authentic personal preferences are captured
 - Creates fair comparison environment where all users vote independently
+
+**Summary**: Users can access results/comments only after making any selection (win/tie/skip). Skip votes do not affect ELO and are excluded from percentage calculations.
 
 ## Security Considerations
 

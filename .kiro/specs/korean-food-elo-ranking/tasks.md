@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Set up project foundation and dependencies
+- [-] 1. Set up project foundation and dependencies
   - Initialize Cloudflare Workers project with Hono framework
   - Install and configure TypeScript, Drizzle ORM, and Better-auth
   - Set up project structure with proper folder organization
@@ -16,17 +16,17 @@
 
   - [ ] 2.2 Implement Better-auth configuration with anonymous plugin
     - Configure Better-auth with Drizzle adapter for D1
-    - Confirm actual table names (user vs users) and update schema references
+    - Use singular Better-auth table names: user, session, account, verification (update schema references accordingly)
     - Set up anonymous plugin with optional nationality field in user additionalFields
     - Create auth configuration with proper session management
     - Test anonymous user creation and session handling
     - _Requirements: 6.1, 6.2, 6.3, 6.4_
 
   - [ ] 2.3 Create custom database schema with normalized data model
-    - Define Drizzle schema for foods table with ELO scoring
-    - Define votes table with normalized pairKey, foodLowId/foodHighId, presentedLeftId/presentedRightId, result, and winnerFoodId
-    - Define comments table with pairKey, result, winnerFoodId, and content
-    - Add composite unique index on votes table (user_id, pair_key) to prevent duplicate voting
+    - Define Drizzle schema for food table with ELO scoring
+    - Define vote table with normalized pairKey, foodLowId/foodHighId, presentedLeftId/presentedRightId, result, and winnerFoodId
+    - Define comment table with pairKey, result, winnerFoodId, and content
+    - Add composite unique index on vote table (user_id, pair_key) to prevent duplicate voting
     - Implement pairKey normalization utility: min(foodId1,foodId2)+'_'+max(foodId1,foodId2)
     - Generate and apply database migrations using Drizzle Kit
     - _Requirements: 7.1, 7.2, 7.3, 4.6_
@@ -131,7 +131,7 @@
     - _Requirements: 6.1, 6.2, 6.3, 6.5, 6.6_
 
   - [ ] 6.3 Implement nationality-based analytics
-    - Create analytics queries that join votes/comments with user.nationality
+    - Create analytics queries that join vote/comment with user.nationality
     - Display nationality breakdowns in results interface
     - Handle cases where users don't have nationality set
     - Document that nationality changes affect historical statistics
