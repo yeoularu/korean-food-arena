@@ -1,4 +1,4 @@
-import { eq, and } from 'drizzle-orm'
+import { eq, and, inArray } from 'drizzle-orm'
 import type { DrizzleD1Database } from 'drizzle-orm/d1'
 import { food, vote, type Vote } from '../db/schema'
 import { ELOCalculator, type MatchResult } from './elo'
@@ -33,9 +33,9 @@ export interface VoteProcessingError extends Error {
 
 export class VoteProcessor {
   private static readonly MAX_RETRIES = 3
-  private static readonly RETRY_DELAYS = [50, 100, 200] // milliseconds
+  private static readonly RETRY_DELAYS = [100, 250, 500] // milliseconds
 
-  constructor(private db: DrizzleD1Database) {}
+  constructor(private db: DrizzleD1Database, private d1: D1Database) {}
 
   /**
    * Process a vote with ELO updates and concurrency control
@@ -63,6 +63,12 @@ export class VoteProcessor {
           throw retryError
         }
 
+        // Log retry attempt for debugging
+        console.warn(
+          `Vote processing retry ${attempt + 1}/${VoteProcessor.MAX_RETRIES} for pair ${voteRequest.pairKey}:`,
+          error,
+        )
+
         // Wait before retrying
         await this.delay(VoteProcessor.RETRY_DELAYS[attempt])
       }
@@ -73,168 +79,184 @@ export class VoteProcessor {
   }
 
   /**
-   * Attempt to process a single vote within a transaction
+   * Attempt to process a single vote using D1 batch to ensure atomicity
    */
   private async attemptVoteProcessing(
     voteRequest: VoteRequest,
   ): Promise<VoteResult> {
-    return await this.db.transaction(async (tx) => {
-      // Check for duplicate vote (unique constraint will also catch this, but we want a specific error)
-      const existingVote = await tx
-        .select()
-        .from(vote)
-        .where(
-          and(
-            eq(vote.userId, voteRequest.userId),
-            eq(vote.pairKey, voteRequest.pairKey),
-          ),
-        )
-        .limit(1)
+    // Early duplicate check (best-effort). Unique index will still enforce.
+    const existingVote = await this.db
+      .select()
+      .from(vote)
+      .where(
+        and(
+          eq(vote.userId, voteRequest.userId),
+          eq(vote.pairKey, voteRequest.pairKey),
+        ),
+      )
+      .limit(1)
 
-      if (existingVote.length > 0) {
-        const duplicateError = new Error(
-          'User has already voted on this food pairing',
-        ) as VoteProcessingError
-        duplicateError.code = 'DUPLICATE_VOTE'
-        throw duplicateError
-      }
+    if (existingVote.length > 0) {
+      const duplicateError = new Error(
+        'User has already voted on this food pairing',
+      ) as VoteProcessingError
+      duplicateError.code = 'DUPLICATE_VOTE'
+      throw duplicateError
+    }
 
-      // Get current food ratings with updated_at for optimistic locking
-      const foods = await tx
-        .select()
-        .from(food)
-        .where(
-          eq(food.id, voteRequest.foodLowId) ||
-            eq(food.id, voteRequest.foodHighId),
-        )
+    // Get current food ratings with updated_at for optimistic locking
+    const foods = await this.db
+      .select()
+      .from(food)
+      .where(
+        inArray(food.id, [voteRequest.foodLowId, voteRequest.foodHighId]),
+      )
 
-      if (foods.length !== 2) {
-        const notFoundError = new Error(
-          'One or both foods not found',
-        ) as VoteProcessingError
-        notFoundError.code = 'FOOD_NOT_FOUND'
-        throw notFoundError
-      }
+    if (foods.length !== 2) {
+      const notFoundError = new Error(
+        'One or both foods not found',
+      ) as VoteProcessingError
+      notFoundError.code = 'FOOD_NOT_FOUND'
+      throw notFoundError
+    }
 
-      const food1 = foods.find((f) => f.id === voteRequest.foodLowId)!
-      const food2 = foods.find((f) => f.id === voteRequest.foodHighId)!
+    const food1 = foods.find((f) => f.id === voteRequest.foodLowId)!
+    const food2 = foods.find((f) => f.id === voteRequest.foodHighId)!
 
-      // Calculate new ELO scores if this is not a skip vote
-      const newScores: { [foodId: string]: number } = {}
+    // Calculate new ELO scores if this is not a skip vote
+    const newScores: { [foodId: string]: number } = {}
 
-      if (voteRequest.result !== 'skip') {
-        // Map vote result to ELO calculation
-        let eloResult1: MatchResult
-
-        if (voteRequest.result === 'tie') {
-          eloResult1 = 'tie'
-        } else if (voteRequest.result === 'win') {
-          if (voteRequest.winnerFoodId === voteRequest.foodLowId) {
-            eloResult1 = 'win'
-          } else if (voteRequest.winnerFoodId === voteRequest.foodHighId) {
-            eloResult1 = 'loss'
-          } else {
-            const invalidError = new Error(
-              'Winner food ID does not match either food in the pair',
-            ) as VoteProcessingError
-            invalidError.code = 'INVALID_VOTE'
-            throw invalidError
-          }
+    let eloResult1: MatchResult | null = null
+    if (voteRequest.result !== 'skip') {
+      if (voteRequest.result === 'tie') {
+        eloResult1 = 'tie'
+      } else if (voteRequest.result === 'win') {
+        if (voteRequest.winnerFoodId === voteRequest.foodLowId) {
+          eloResult1 = 'win'
+        } else if (voteRequest.winnerFoodId === voteRequest.foodHighId) {
+          eloResult1 = 'loss'
         } else {
           const invalidError = new Error(
-            `Invalid vote result: ${voteRequest.result}`,
+            'Winner food ID does not match either food in the pair',
           ) as VoteProcessingError
           invalidError.code = 'INVALID_VOTE'
           throw invalidError
         }
-
-        // Calculate new ELO ratings
-        const eloUpdate = ELOCalculator.calculateNewRatings(
-          food1.eloScore,
-          food2.eloScore,
-          eloResult1,
-        )
-
-        newScores[food1.id] = eloUpdate.newRating1
-        newScores[food2.id] = eloUpdate.newRating2
-
-        // Update food ratings with optimistic locking
-        const currentTimestamp = new Date().toISOString()
-
-        const food1UpdateResult = await tx
-          .update(food)
-          .set({
-            eloScore: newScores[food1.id],
-            totalVotes: food1.totalVotes + 1,
-            updatedAt: currentTimestamp,
-          })
-          .where(
-            and(eq(food.id, food1.id), eq(food.updatedAt, food1.updatedAt!)),
-          )
-          .returning()
-
-        const food2UpdateResult = await tx
-          .update(food)
-          .set({
-            eloScore: newScores[food2.id],
-            totalVotes: food2.totalVotes + 1,
-            updatedAt: currentTimestamp,
-          })
-          .where(
-            and(eq(food.id, food2.id), eq(food.updatedAt, food2.updatedAt!)),
-          )
-          .returning()
-
-        // Check if optimistic locking failed (no rows updated)
-        if (food1UpdateResult.length === 0 || food2UpdateResult.length === 0) {
-          const concurrencyError = new Error(
-            'Concurrent modification detected, retrying...',
-          ) as VoteProcessingError
-          concurrencyError.code = 'CONCURRENCY_ERROR'
-          throw concurrencyError
-        }
       } else {
-        // For skip votes, only increment total votes without changing ELO
-        const currentTimestamp = new Date().toISOString()
-
-        const food1UpdateResult = await tx
-          .update(food)
-          .set({
-            totalVotes: food1.totalVotes + 1,
-            updatedAt: currentTimestamp,
-          })
-          .where(
-            and(eq(food.id, food1.id), eq(food.updatedAt, food1.updatedAt!)),
-          )
-          .returning()
-
-        const food2UpdateResult = await tx
-          .update(food)
-          .set({
-            totalVotes: food2.totalVotes + 1,
-            updatedAt: currentTimestamp,
-          })
-          .where(
-            and(eq(food.id, food2.id), eq(food.updatedAt, food2.updatedAt!)),
-          )
-          .returning()
-
-        // Check if optimistic locking failed
-        if (food1UpdateResult.length === 0 || food2UpdateResult.length === 0) {
-          const concurrencyError = new Error(
-            'Concurrent modification detected, retrying...',
-          ) as VoteProcessingError
-          concurrencyError.code = 'CONCURRENCY_ERROR'
-          throw concurrencyError
-        }
-
-        // Keep current scores for skip votes
-        newScores[food1.id] = food1.eloScore
-        newScores[food2.id] = food2.eloScore
+        const invalidError = new Error(
+          `Invalid vote result: ${voteRequest.result}`,
+        ) as VoteProcessingError
+        invalidError.code = 'INVALID_VOTE'
+        throw invalidError
       }
 
-      // Insert the vote record
-      const newVote: typeof vote.$inferInsert = {
+      const eloUpdate = ELOCalculator.calculateNewRatings(
+        food1.eloScore,
+        food2.eloScore,
+        eloResult1,
+      )
+      newScores[food1.id] = eloUpdate.newRating1
+      newScores[food2.id] = eloUpdate.newRating2
+    } else {
+      // Keep current scores for skip votes
+      newScores[food1.id] = food1.eloScore
+      newScores[food2.id] = food2.eloScore
+    }
+
+    // Build a D1 batch that updates both foods (with optimistic locking guards) and inserts the vote.
+    // If any optimistic lock fails (no rows changed), we intentionally cause a division-by-zero error to abort the batch.
+    const currentTimestamp = new Date().toISOString()
+    const stmts: D1PreparedStatement[] = []
+
+    if (voteRequest.result !== 'skip') {
+      stmts.push(
+        this.d1
+          .prepare(
+            'UPDATE food SET elo_score = ?, total_votes = ?, updated_at = ? WHERE id = ? AND updated_at = ?',
+          )
+          .bind(
+            newScores[food1.id],
+            food1.totalVotes + 1,
+            currentTimestamp,
+            food1.id,
+            food1.updatedAt,
+          ),
+      )
+      // Guard: fail if previous UPDATE affected 0 rows
+      stmts.push(this.d1.prepare('SELECT IIF(changes() = 0, 1/0, 0)'))
+
+      stmts.push(
+        this.d1
+          .prepare(
+            'UPDATE food SET elo_score = ?, total_votes = ?, updated_at = ? WHERE id = ? AND updated_at = ?',
+          )
+          .bind(
+            newScores[food2.id],
+            food2.totalVotes + 1,
+            currentTimestamp,
+            food2.id,
+            food2.updatedAt,
+          ),
+      )
+      // Guard: fail if previous UPDATE affected 0 rows
+      stmts.push(this.d1.prepare('SELECT IIF(changes() = 0, 1/0, 0)'))
+    } else {
+      stmts.push(
+        this.d1
+          .prepare(
+            'UPDATE food SET total_votes = ?, updated_at = ? WHERE id = ? AND updated_at = ?',
+          )
+          .bind(
+            food1.totalVotes + 1,
+            currentTimestamp,
+            food1.id,
+            food1.updatedAt,
+          ),
+      )
+      stmts.push(this.d1.prepare('SELECT IIF(changes() = 0, 1/0, 0)'))
+
+      stmts.push(
+        this.d1
+          .prepare(
+            'UPDATE food SET total_votes = ?, updated_at = ? WHERE id = ? AND updated_at = ?',
+          )
+          .bind(
+            food2.totalVotes + 1,
+            currentTimestamp,
+            food2.id,
+            food2.updatedAt,
+          ),
+      )
+      stmts.push(this.d1.prepare('SELECT IIF(changes() = 0, 1/0, 0)'))
+    }
+
+    // Insert vote with a predetermined id and createdAt so we can return it without a round-trip.
+    const newVoteId = crypto.randomUUID()
+    const voteCreatedAt = new Date().toISOString()
+    stmts.push(
+      this.d1
+        .prepare(
+          'INSERT INTO vote (id, pair_key, food_low_id, food_high_id, presented_left_id, presented_right_id, result, winner_food_id, user_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        )
+        .bind(
+          newVoteId,
+          voteRequest.pairKey,
+          voteRequest.foodLowId,
+          voteRequest.foodHighId,
+          voteRequest.presentedLeftId,
+          voteRequest.presentedRightId,
+          voteRequest.result,
+          voteRequest.winnerFoodId || null,
+          voteRequest.userId,
+          voteCreatedAt,
+        ),
+    )
+
+    try {
+      await this.d1.batch(stmts)
+
+      const insertedVote: Vote = {
+        id: newVoteId,
         pairKey: voteRequest.pairKey,
         foodLowId: voteRequest.foodLowId,
         foodHighId: voteRequest.foodHighId,
@@ -243,16 +265,37 @@ export class VoteProcessor {
         result: voteRequest.result,
         winnerFoodId: voteRequest.winnerFoodId || null,
         userId: voteRequest.userId,
-        createdAt: new Date().toISOString(),
+        createdAt: voteCreatedAt,
       }
-
-      const insertedVotes = await tx.insert(vote).values(newVote).returning()
 
       return {
-        vote: insertedVotes[0],
+        vote: insertedVote,
         updatedScores: newScores,
       }
-    })
+    } catch (err) {
+      if (err && typeof err === 'object' && 'message' in err) {
+        const msg = (err as Error).message
+        // Concurrency guard triggers division by zero
+        if (msg.includes('division by zero')) {
+          const concurrencyError = new Error(
+            `Concurrent modification detected for foods ${food1.id}/${food2.id}, retrying...`,
+          ) as VoteProcessingError
+          concurrencyError.code = 'CONCURRENCY_ERROR'
+          throw concurrencyError
+        }
+        if (
+          msg.includes('UNIQUE constraint failed') &&
+          msg.includes('idx_vote_user_pair')
+        ) {
+          const duplicateError = new Error(
+            'User has already voted on this food pairing',
+          ) as VoteProcessingError
+          duplicateError.code = 'DUPLICATE_VOTE'
+          throw duplicateError
+        }
+      }
+      throw err
+    }
   }
 
   /**

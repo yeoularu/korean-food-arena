@@ -10,12 +10,13 @@ const mockDb = {
   update: vi.fn(),
 }
 
-// Mock transaction object
-const mockTx = {
-  select: vi.fn(),
-  insert: vi.fn(),
-  update: vi.fn(),
-}
+// Mock D1 binding with minimal API used by VoteProcessor
+const mockD1 = {
+  batch: vi.fn(async () => []),
+  prepare: vi.fn(() => ({
+    bind: vi.fn().mockReturnThis(),
+  })),
+} as unknown as D1Database
 
 describe('VoteProcessor', () => {
   let voteProcessor: VoteProcessor
@@ -24,7 +25,17 @@ describe('VoteProcessor', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    voteProcessor = new VoteProcessor(mockDb as unknown as DrizzleD1Database)
+    // Reset default D1 behavior to success
+    ;(mockD1.batch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      [],
+    )
+    ;(mockD1.prepare as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      () => ({ bind: vi.fn().mockReturnThis() }),
+    )
+    voteProcessor = new VoteProcessor(
+      mockDb as unknown as DrizzleD1Database,
+      mockD1,
+    )
 
     // Mock foods data
     mockFoods = [
@@ -63,37 +74,16 @@ describe('VoteProcessor', () => {
 
   describe('processVote', () => {
     it('should successfully process a win vote with ELO updates', async () => {
-      // Setup mocks
-      mockDb.transaction.mockImplementation(async (callback) => {
-        return await callback(mockTx)
-      })
-
-      mockTx.select.mockReturnValueOnce({
+      // Setup Drizzle selects: no existing vote, then return both foods
+      mockDb.select.mockReturnValueOnce({
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         limit: vi.fn().mockResolvedValue([]), // No existing vote
       })
 
-      mockTx.select.mockReturnValueOnce({
+      mockDb.select.mockReturnValueOnce({
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockResolvedValue(mockFoods), // Return both foods
-      })
-
-      mockTx.update.mockReturnValue({
-        set: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockResolvedValue([{ id: 'food1' }]), // Successful update
-      })
-
-      mockTx.insert.mockReturnValue({
-        values: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockResolvedValue([
-          {
-            id: 'vote123',
-            ...baseVoteRequest,
-            createdAt: '2024-01-01T00:00:00Z',
-          },
-        ]),
       })
 
       const result = await voteProcessor.processVote(baseVoteRequest)
@@ -111,37 +101,16 @@ describe('VoteProcessor', () => {
         winnerFoodId: undefined,
       }
 
-      // Setup mocks
-      mockDb.transaction.mockImplementation(async (callback) => {
-        return await callback(mockTx)
-      })
-
-      mockTx.select.mockReturnValueOnce({
+      // Setup Drizzle selects: no existing vote, then return both foods
+      mockDb.select.mockReturnValueOnce({
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         limit: vi.fn().mockResolvedValue([]), // No existing vote
       })
 
-      mockTx.select.mockReturnValueOnce({
+      mockDb.select.mockReturnValueOnce({
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockResolvedValue(mockFoods), // Return both foods
-      })
-
-      mockTx.update.mockReturnValue({
-        set: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockResolvedValue([{ id: 'food1' }]), // Successful update
-      })
-
-      mockTx.insert.mockReturnValue({
-        values: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockResolvedValue([
-          {
-            id: 'vote123',
-            ...tieVoteRequest,
-            createdAt: '2024-01-01T00:00:00Z',
-          },
-        ]),
       })
 
       const result = await voteProcessor.processVote(tieVoteRequest)
@@ -160,37 +129,16 @@ describe('VoteProcessor', () => {
         winnerFoodId: undefined,
       }
 
-      // Setup mocks
-      mockDb.transaction.mockImplementation(async (callback) => {
-        return await callback(mockTx)
-      })
-
-      mockTx.select.mockReturnValueOnce({
+      // Setup Drizzle selects: no existing vote, then return both foods
+      mockDb.select.mockReturnValueOnce({
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         limit: vi.fn().mockResolvedValue([]), // No existing vote
       })
 
-      mockTx.select.mockReturnValueOnce({
+      mockDb.select.mockReturnValueOnce({
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockResolvedValue(mockFoods), // Return both foods
-      })
-
-      mockTx.update.mockReturnValue({
-        set: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockResolvedValue([{ id: 'food1' }]), // Successful update
-      })
-
-      mockTx.insert.mockReturnValue({
-        values: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockResolvedValue([
-          {
-            id: 'vote123',
-            ...skipVoteRequest,
-            createdAt: '2024-01-01T00:00:00Z',
-          },
-        ]),
       })
 
       const result = await voteProcessor.processVote(skipVoteRequest)
@@ -203,12 +151,8 @@ describe('VoteProcessor', () => {
     })
 
     it('should throw DUPLICATE_VOTE error when user has already voted', async () => {
-      // Setup mocks
-      mockDb.transaction.mockImplementation(async (callback) => {
-        return await callback(mockTx)
-      })
-
-      mockTx.select.mockReturnValueOnce({
+      // Setup Drizzle select to return an existing vote
+      mockDb.select.mockReturnValueOnce({
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         limit: vi.fn().mockResolvedValue([{ id: 'existing-vote' }]), // Existing vote found
@@ -220,18 +164,14 @@ describe('VoteProcessor', () => {
     })
 
     it('should throw FOOD_NOT_FOUND error when foods are missing', async () => {
-      // Setup mocks
-      mockDb.transaction.mockImplementation(async (callback) => {
-        return await callback(mockTx)
-      })
-
-      mockTx.select.mockReturnValueOnce({
+      // No existing vote
+      mockDb.select.mockReturnValueOnce({
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         limit: vi.fn().mockResolvedValue([]), // No existing vote
       })
-
-      mockTx.select.mockReturnValueOnce({
+      // Only one food found
+      mockDb.select.mockReturnValueOnce({
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockResolvedValue([mockFoods[0]]), // Only one food found
       })
@@ -244,49 +184,29 @@ describe('VoteProcessor', () => {
     it('should retry on concurrency errors and eventually succeed', async () => {
       let transactionAttempt = 0
 
-      // Setup mocks
-      mockDb.transaction.mockImplementation(async (callback) => {
-        transactionAttempt++
-
-        // Reset mocks for each transaction attempt
-        vi.clearAllMocks()
-
-        mockTx.select.mockReturnValueOnce({
+      // Provide selects for 3 attempts (6 calls total)
+      for (let i = 0; i < 3; i++) {
+        mockDb.select.mockReturnValueOnce({
           from: vi.fn().mockReturnThis(),
           where: vi.fn().mockReturnThis(),
           limit: vi.fn().mockResolvedValue([]), // No existing vote
         })
-
-        mockTx.select.mockReturnValueOnce({
+        mockDb.select.mockReturnValueOnce({
           from: vi.fn().mockReturnThis(),
           where: vi.fn().mockResolvedValue(mockFoods), // Return both foods
         })
+      }
 
-        // Mock both food updates
-        mockTx.update.mockReturnValue({
-          set: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-          returning: vi.fn().mockImplementation(() => {
-            if (transactionAttempt <= 2) {
-              return Promise.resolve([]) // Simulate concurrency conflict (no rows updated)
-            }
-            return Promise.resolve([{ id: 'food1' }]) // Success on third attempt
-          }),
-        })
-
-        mockTx.insert.mockReturnValue({
-          values: vi.fn().mockReturnThis(),
-          returning: vi.fn().mockResolvedValue([
-            {
-              id: 'vote123',
-              ...baseVoteRequest,
-              createdAt: '2024-01-01T00:00:00Z',
-            },
-          ]),
-        })
-
-        return await callback(mockTx)
-      })
+      // Simulate D1 batch failing twice with division by zero, then succeeding
+      ;(mockD1.batch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+        async () => {
+          transactionAttempt++
+          if (transactionAttempt <= 2) {
+            throw new Error('division by zero')
+          }
+          return []
+        },
+      )
 
       const result = await voteProcessor.processVote(baseVoteRequest)
 
@@ -295,27 +215,24 @@ describe('VoteProcessor', () => {
     })
 
     it('should throw RETRY_EXHAUSTED error after maximum retries', async () => {
-      // Setup mocks
-      mockDb.transaction.mockImplementation(async (callback) => {
-        return await callback(mockTx)
-      })
+      // Provide selects for each retry attempt
+      for (let i = 0; i < 3; i++) {
+        mockDb.select.mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue([]), // No existing vote
+        })
+        mockDb.select.mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValue(mockFoods), // Return both foods
+        })
+      }
 
-      mockTx.select.mockReturnValue({
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([]), // No existing vote
-      })
-
-      mockTx.select.mockReturnValue({
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockResolvedValue(mockFoods), // Return both foods
-      })
-
-      mockTx.update.mockReturnValue({
-        set: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockResolvedValue([]), // Always fail (no rows updated)
-      })
+      ;(mockD1.batch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+        async () => {
+          throw new Error('division by zero')
+        },
+      )
 
       await expect(voteProcessor.processVote(baseVoteRequest)).rejects.toThrow(
         'Vote processing failed after maximum retries',
@@ -439,37 +356,16 @@ describe('VoteProcessor', () => {
         winnerFoodId: 'food1', // Lower rated food wins
       }
 
-      // Setup mocks
-      mockDb.transaction.mockImplementation(async (callback) => {
-        return await callback(mockTx)
-      })
-
-      mockTx.select.mockReturnValueOnce({
+      // No existing vote
+      mockDb.select.mockReturnValueOnce({
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         limit: vi.fn().mockResolvedValue([]), // No existing vote
       })
-
-      mockTx.select.mockReturnValueOnce({
+      // Return both foods
+      mockDb.select.mockReturnValueOnce({
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockResolvedValue(mockFoods), // Return both foods
-      })
-
-      mockTx.update.mockReturnValue({
-        set: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockResolvedValue([{ id: 'food1' }]), // Successful update
-      })
-
-      mockTx.insert.mockReturnValue({
-        values: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockResolvedValue([
-          {
-            id: 'vote123',
-            ...upsetRequest,
-            createdAt: '2024-01-01T00:00:00Z',
-          },
-        ]),
       })
 
       const result = await voteProcessor.processVote(upsetRequest)
@@ -487,37 +383,16 @@ describe('VoteProcessor', () => {
         winnerFoodId: 'food2', // Higher rated food wins
       }
 
-      // Setup mocks
-      mockDb.transaction.mockImplementation(async (callback) => {
-        return await callback(mockTx)
-      })
-
-      mockTx.select.mockReturnValueOnce({
+      // No existing vote
+      mockDb.select.mockReturnValueOnce({
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         limit: vi.fn().mockResolvedValue([]), // No existing vote
       })
-
-      mockTx.select.mockReturnValueOnce({
+      // Return both foods
+      mockDb.select.mockReturnValueOnce({
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockResolvedValue(mockFoods), // Return both foods
-      })
-
-      mockTx.update.mockReturnValue({
-        set: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockResolvedValue([{ id: 'food1' }]), // Successful update
-      })
-
-      mockTx.insert.mockReturnValue({
-        values: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockResolvedValue([
-          {
-            id: 'vote123',
-            ...normalWinRequest,
-            createdAt: '2024-01-01T00:00:00Z',
-          },
-        ]),
       })
 
       const result = await voteProcessor.processVote(normalWinRequest)

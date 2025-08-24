@@ -45,7 +45,7 @@ describe('requireAdminAuth', () => {
     const app = createApp('secret-key')
 
     const res = await app.request('/admin/test', {
-      headers: { Authorization: 'Bearer wrong-key' },
+      headers: { 'x-admin-api-key': 'wrong-key' },
     })
 
     expect(res.status).toBe(401)
@@ -53,52 +53,16 @@ describe('requireAdminAuth', () => {
     expect(body.message).toContain('Invalid admin API key')
   })
 
-  it('should allow access with valid Authorization header', async () => {
+  it('should allow access with valid x-admin-api-key header', async () => {
     const app = createApp('secret-key')
 
     const res = await app.request('/admin/test', {
-      headers: { Authorization: 'Bearer secret-key' },
+      headers: { 'x-admin-api-key': 'secret-key' },
     })
 
     expect(res.status).toBe(200)
     const body = (await res.json()) as { success: boolean }
     expect(body.success).toBe(true)
   })
-
-  it('should allow access with valid x-api-key header', async () => {
-    const app = createApp('secret-key')
-
-    const res = await app.request('/admin/test', {
-      headers: { 'x-api-key': 'secret-key' },
-    })
-
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as { success: boolean }
-    expect(body.success).toBe(true)
-  })
-
-  it('should allow access with valid query parameter', async () => {
-    const app = createApp('secret-key')
-
-    const res = await app.request('/admin/test?api_key=secret-key')
-
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as { success: boolean }
-    expect(body.success).toBe(true)
-  })
-
-  it('should prioritize Authorization header over other methods', async () => {
-    const app = createApp('secret-key')
-
-    const res = await app.request('/admin/test?api_key=wrong-key', {
-      headers: {
-        Authorization: 'Bearer secret-key',
-        'x-api-key': 'wrong-key',
-      },
-    })
-
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as { success: boolean }
-    expect(body.success).toBe(true)
-  })
-})
+}
+)

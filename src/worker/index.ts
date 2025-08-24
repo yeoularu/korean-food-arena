@@ -162,7 +162,7 @@ app.post(
 
     // Process the vote
     const db = getDb(c.env.DB)
-    const voteProcessor = new VoteProcessor(db)
+    const voteProcessor = new VoteProcessor(db, c.env.DB)
 
     try {
       const result = await voteProcessor.processVote({
