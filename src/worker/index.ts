@@ -4,7 +4,7 @@ import { createRuntimeAuth } from './lib/createRuntimeAuth'
 import { AuthVariables } from '../auth'
 import { getDb } from './db'
 import { food, vote, user, comment } from './db/schema'
-import { desc, sql, eq, and } from 'drizzle-orm'
+import { desc, sql, eq, and, inArray } from 'drizzle-orm'
 import { VoteProcessor, type VoteProcessingError } from './lib/voteProcessor'
 import {
   VoteRequestSchema,
@@ -239,6 +239,21 @@ app.get(
 async function getVoteStats(db: ReturnType<typeof getDb>, pairKey: string) {
   const MIN_GROUP_SIZE = 5
 
+  // Derive the two food IDs from the pairKey and fetch their display names
+  const [id1, id2] = pairKey.split('_')
+  const foodIds = [id1, id2].filter(Boolean)
+  const foodsForPair =
+    foodIds.length === 2
+      ? await db
+          .select({ id: food.id, name: food.name, imageUrl: food.imageUrl })
+          .from(food)
+          .where(inArray(food.id, foodIds))
+      : []
+  const foodNamesById: Record<string, string> = {}
+  foodsForPair.forEach((f) => {
+    if (f.id) foodNamesById[f.id] = f.name
+  })
+
   // Get all votes for this pair with user nationality
   const votesWithNationality = await db
     .select({
@@ -388,6 +403,7 @@ async function getVoteStats(db: ReturnType<typeof getDb>, pairKey: string) {
     percentageByFoodId,
     tiePercentage,
     nationalityBreakdown,
+    foodNamesById,
     countryCodeStandard: 'ISO-3166-1-alpha-2' as const,
   }
 }

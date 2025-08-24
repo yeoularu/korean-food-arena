@@ -27,7 +27,9 @@ function VoteStatsDisplay({ stats }: VoteStatsDisplayProps) {
         {Object.entries(stats.percentageByFoodId).map(
           ([foodId, percentage]) => (
             <div key={foodId} className="flex items-center justify-between">
-              <span className="text-sm">Food {foodId}</span>
+              <span className="text-sm">
+                {stats.foodNamesById?.[foodId] || `Food ${foodId}`}
+              </span>
               <div className="flex items-center space-x-2">
                 <div className="w-32 bg-muted rounded-full h-2">
                   <div
@@ -81,7 +83,9 @@ function VoteStatsDisplay({ stats }: VoteStatsDisplayProps) {
                         key={foodId}
                         className="flex justify-between text-xs"
                       >
-                        <span>Food {foodId}</span>
+                        <span>
+                          {stats.foodNamesById?.[foodId] || `Food ${foodId}`}
+                        </span>
                         <span>{count} votes</span>
                       </div>
                     ))}
@@ -106,9 +110,10 @@ interface CommentSectionProps {
   pairKey: string
   comments: Comment[]
   isLoading: boolean
+  foodNamesById?: Record<string, string>
 }
 
-function CommentSection({ pairKey, comments, isLoading }: CommentSectionProps) {
+function CommentSection({ pairKey, comments, isLoading, foodNamesById }: CommentSectionProps) {
   const [newComment, setNewComment] = useState('')
   const commentMutation = useCommentMutation()
 
@@ -195,7 +200,7 @@ function CommentSection({ pairKey, comments, isLoading }: CommentSectionProps) {
               <p className="text-sm">{comment.content}</p>
               {comment.result === 'win' && comment.winnerFoodId && (
                 <div className="text-xs text-muted-foreground mt-1">
-                  Chose: Food {comment.winnerFoodId}
+                  Chose: {foodNamesById?.[comment.winnerFoodId] || `Food ${comment.winnerFoodId}`}
                 </div>
               )}
               {comment.result === 'tie' && (
@@ -304,6 +309,7 @@ export function Results({ pairKey }: ResultsProps) {
         pairKey={pairKey}
         comments={comments}
         isLoading={commentsLoading}
+        foodNamesById={stats.foodNamesById}
       />
 
       <div className="text-center">

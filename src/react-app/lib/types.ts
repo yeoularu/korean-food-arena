@@ -76,6 +76,8 @@ export interface VoteStats {
       tiePercentage: number
     }
   >
+  // Added: map food IDs to their display names for rendering
+  foodNamesById: Record<string, string>
   countryCodeStandard: 'ISO-3166-1-alpha-2'
 }
 // API Request/Response types
