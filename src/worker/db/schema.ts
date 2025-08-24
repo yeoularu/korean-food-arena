@@ -39,15 +39,10 @@ export const vote = sqliteTable(
       .references(() => user.id), // References better-auth user table
     createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`), // ISO 8601 TEXT format
   },
-  (table) => {
-    return {
-      // Composite unique index to prevent duplicate voting on same pairing
-      userPairUnique: uniqueIndex('idx_vote_user_pair').on(
-        table.userId,
-        table.pairKey,
-      ),
-    }
-  },
+  (table) => [
+    // Composite unique index to prevent duplicate voting on same pairing
+    uniqueIndex('idx_vote_user_pair').on(table.userId, table.pairKey),
+  ],
 )
 
 // Custom Comment table
