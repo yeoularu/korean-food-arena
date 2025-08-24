@@ -13,6 +13,8 @@ import { routeTree } from './routeTree.gen'
 import './styles.css'
 import { ThemeProvider } from './components/theme-provider.tsx'
 import { EnsureSession } from './components/EnsureSession.tsx'
+import { ErrorBoundary } from './components/ErrorBoundary.tsx'
+import { ToastProvider } from './components/Toast.tsx'
 
 // Create a new router instance
 
@@ -41,27 +43,31 @@ if (rootElement && !rootElement.innerHTML) {
   const root = ReactDOM.createRoot(rootElement)
   root.render(
     <StrictMode>
-      <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
-        <TanStackQueryProvider.Provider {...TanStackQueryProviderContext}>
-          {import.meta.env.DEV && (
-            <TanStackDevtools
-              plugins={[
-                {
-                  name: 'TanStack Query',
-                  render: <ReactQueryDevtoolsPanel />,
-                },
-                {
-                  name: 'TanStack Router',
-                  render: <TanStackRouterDevtoolsPanel router={router} />,
-                },
-              ]}
-            />
-          )}
-          <EnsureSession>
-            <RouterProvider router={router} />
-          </EnsureSession>
-        </TanStackQueryProvider.Provider>
-      </ThemeProvider>
+      <ErrorBoundary>
+        <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+          <ToastProvider>
+            <TanStackQueryProvider.Provider {...TanStackQueryProviderContext}>
+              {import.meta.env.DEV && (
+                <TanStackDevtools
+                  plugins={[
+                    {
+                      name: 'TanStack Query',
+                      render: <ReactQueryDevtoolsPanel />,
+                    },
+                    {
+                      name: 'TanStack Router',
+                      render: <TanStackRouterDevtoolsPanel router={router} />,
+                    },
+                  ]}
+                />
+              )}
+              <EnsureSession>
+                <RouterProvider router={router} />
+              </EnsureSession>
+            </TanStackQueryProvider.Provider>
+          </ToastProvider>
+        </ThemeProvider>
+      </ErrorBoundary>
     </StrictMode>,
   )
 }

@@ -2,11 +2,28 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { createRuntimeAuth } from './lib/createRuntimeAuth'
 import { AuthVariables } from '../auth'
-import { getDb, withDbErrorHandling } from './db'
+import { getDb } from './db'
 import { food, vote, user, comment } from './db/schema'
 import { desc, sql, eq, and } from 'drizzle-orm'
-import { z } from 'zod'
 import { VoteProcessor, type VoteProcessingError } from './lib/voteProcessor'
+import {
+  VoteRequestSchema,
+  CommentRequestSchema,
+  UpdateNationalitySchema,
+  PaginationQuerySchema,
+  sanitizeContent,
+} from './lib/validation'
+import {
+  asyncHandler,
+  requireAuth,
+  requireVoteAccess,
+  withErrorHandling,
+  ValidationError,
+  ConflictError,
+  NotFoundError,
+  InternalServerError,
+  validateRequest,
+} from './lib/errorHandling'
 
 const app = new Hono<{ Bindings: Env; Variables: AuthVariables }>()
 
@@ -36,45 +53,19 @@ app.on(['POST', 'GET'], '/api/auth/*', (c) => {
 })
 
 // Custom auth endpoint for updating nationality
-app.post('/api/auth/update-nationality', async (c) => {
-  try {
+app.post(
+  '/api/auth/update-nationality',
+  asyncHandler(async (c) => {
     // Check authentication
-    const currentUser = c.get('user')
-    if (!currentUser) {
-      return c.json(
-        {
-          error: 'Unauthorized',
-          message: 'Authentication required',
-          code: 401,
-        },
-        401,
-      )
-    }
+    const currentUser = requireAuth(c)
 
     // Parse and validate request body
     const body = await c.req.json()
-    const nationalitySchema = z.object({
-      nationality: z.string().optional(),
-    })
-
-    const validationResult = nationalitySchema.safeParse(body)
-    if (!validationResult.success) {
-      return c.json(
-        {
-          error: 'Bad Request',
-          message: 'Invalid nationality data',
-          code: 400,
-          details: validationResult.error.issues,
-        },
-        400,
-      )
-    }
-
-    const { nationality } = validationResult.data
+    const { nationality } = validateRequest(UpdateNationalitySchema, body)
 
     // Update user nationality in database
     const db = getDb(c.env.DB)
-    const result = await withDbErrorHandling(async () => {
+    const result = await withErrorHandling(async () => {
       const updatedUsers = await db
         .update(user)
         .set({
@@ -84,17 +75,10 @@ app.post('/api/auth/update-nationality', async (c) => {
         .returning()
 
       return updatedUsers[0]
-    }, 'Update user nationality')
+    }, 'update user nationality')
 
     if (!result) {
-      return c.json(
-        {
-          error: 'Not Found',
-          message: 'User not found',
-          code: 404,
-        },
-        404,
-      )
+      throw new NotFoundError('User not found')
     }
 
     // Return updated user data
@@ -105,27 +89,18 @@ app.post('/api/auth/update-nationality', async (c) => {
       },
       message: 'Nationality updated successfully',
     })
-  } catch (error) {
-    console.error('Failed to update nationality:', error)
-    return c.json(
-      {
-        error: 'Internal Server Error',
-        message: 'Failed to update nationality',
-        code: 500,
-      },
-      500,
-    )
-  }
-})
+  }),
+)
 
 // Food Management Endpoints
 
 // GET /api/foods/random-pair - Returns two random foods for comparison
-app.get('/api/foods/random-pair', async (c) => {
-  try {
+app.get(
+  '/api/foods/random-pair',
+  asyncHandler(async (c) => {
     const db = getDb(c.env.DB)
 
-    const result = await withDbErrorHandling(async () => {
+    const result = await withErrorHandling(async () => {
       // Get two random foods using SQL ORDER BY RANDOM()
       const randomFoods = await db
         .select()
@@ -134,7 +109,9 @@ app.get('/api/foods/random-pair', async (c) => {
         .limit(2)
 
       if (randomFoods.length < 2) {
-        throw new Error('Insufficient food data available')
+        throw new InternalServerError(
+          'Insufficient food data available - please seed the database',
+        )
       }
 
       // Randomize left/right presentation order
@@ -145,244 +122,117 @@ app.get('/api/foods/random-pair', async (c) => {
         presentedLeft: shouldSwap ? food2 : food1,
         presentedRight: shouldSwap ? food1 : food2,
       }
-    }, 'Get random food pair')
+    }, 'retrieve random food pair')
 
     return c.json(result)
-  } catch (error) {
-    console.error('Failed to get random food pair:', error)
-    return c.json(
-      {
-        error: 'Internal Server Error',
-        message: 'Failed to retrieve food pair',
-        code: 500,
-      },
-      500,
-    )
-  }
-})
+  }),
+)
 
 // GET /api/foods/leaderboard - Returns all foods sorted by ELO score
-app.get('/api/foods/leaderboard', async (c) => {
-  try {
+app.get(
+  '/api/foods/leaderboard',
+  asyncHandler(async (c) => {
     const db = getDb(c.env.DB)
 
-    const result = await withDbErrorHandling(async () => {
+    const result = await withErrorHandling(async () => {
       // Get all foods sorted by ELO score DESC, then totalVotes DESC, then name ASC
       return await db
         .select()
         .from(food)
         .orderBy(desc(food.eloScore), desc(food.totalVotes), food.name)
-    }, 'Get food leaderboard')
+    }, 'retrieve food leaderboard')
 
     return c.json(result)
-  } catch (error) {
-    console.error('Failed to get food leaderboard:', error)
-    return c.json(
-      {
-        error: 'Internal Server Error',
-        message: 'Failed to retrieve leaderboard',
-        code: 500,
-      },
-      500,
-    )
-  }
-})
-
-// Zod Schemas for Validation
-
-const VoteRequestSchema = z.object({
-  pairKey: z.string().min(1),
-  foodLowId: z.string().min(1),
-  foodHighId: z.string().min(1),
-  presentedLeftId: z.string().min(1),
-  presentedRightId: z.string().min(1),
-  result: z.enum(['win', 'tie', 'skip']),
-  winnerFoodId: z.string().optional(),
-})
-
-const CommentRequestSchema = z.object({
-  pairKey: z.string().min(1),
-  result: z.enum(['win', 'tie']),
-  winnerFoodId: z.string().optional(),
-  content: z.string().min(1).max(280, 'Comment must be 280 characters or less'),
-})
+  }),
+)
 
 // Voting System Endpoints
 
 // POST /api/votes - Records a vote and updates ELO scores
-app.post('/api/votes', async (c) => {
-  try {
+app.post(
+  '/api/votes',
+  asyncHandler(async (c) => {
     // Check authentication
-    const currentUser = c.get('user')
-    if (!currentUser) {
-      return c.json(
-        {
-          error: 'Unauthorized',
-          message: 'Authentication required',
-          code: 401,
-        },
-        401,
-      )
-    }
+    const currentUser = requireAuth(c)
 
     // Parse and validate request body
     const body = await c.req.json()
-    const validationResult = VoteRequestSchema.safeParse(body)
-
-    if (!validationResult.success) {
-      return c.json(
-        {
-          error: 'Bad Request',
-          message: 'Invalid vote data',
-          code: 400,
-          details: validationResult.error.issues,
-        },
-        400,
-      )
-    }
-
-    const voteData = validationResult.data
+    const voteData = validateRequest(VoteRequestSchema, body)
 
     // Process the vote
     const db = getDb(c.env.DB)
     const voteProcessor = new VoteProcessor(db)
 
-    const result = await voteProcessor.processVote({
-      ...voteData,
-      userId: currentUser.id,
-    })
+    try {
+      const result = await voteProcessor.processVote({
+        ...voteData,
+        userId: currentUser.id,
+      })
 
-    // Get updated vote statistics
-    const voteStats = await getVoteStats(db, voteData.pairKey)
+      // Get updated vote statistics
+      const voteStats = await getVoteStats(db, voteData.pairKey)
 
-    return c.json({
-      vote: result.vote,
-      updatedScores: result.updatedScores,
-      voteStats,
-    })
-  } catch (error) {
-    console.error('Vote processing failed:', error)
+      return c.json({
+        vote: result.vote,
+        updatedScores: result.updatedScores,
+        voteStats,
+      })
+    } catch (error) {
+      // Handle specific vote processing errors
+      if (error && typeof error === 'object' && 'code' in error) {
+        const voteError = error as VoteProcessingError
 
-    // Handle specific vote processing errors
-    if (error && typeof error === 'object' && 'code' in error) {
-      const voteError = error as VoteProcessingError
-
-      switch (voteError.code) {
-        case 'DUPLICATE_VOTE':
-          return c.json(
-            {
-              error: 'Conflict',
-              message: 'You have already voted on this food pairing',
-              code: 409,
-            },
-            409,
-          )
-        case 'FOOD_NOT_FOUND':
-          return c.json(
-            {
-              error: 'Bad Request',
-              message: 'One or both foods not found',
-              code: 400,
-            },
-            400,
-          )
-        case 'INVALID_VOTE':
-          return c.json(
-            {
-              error: 'Bad Request',
-              message: voteError.message,
-              code: 400,
-            },
-            400,
-          )
-        case 'RETRY_EXHAUSTED':
-          return c.json(
-            {
-              error: 'Internal Server Error',
-              message:
-                'Vote processing failed due to high concurrency, please try again',
-              code: 500,
-            },
-            500,
-          )
+        switch (voteError.code) {
+          case 'DUPLICATE_VOTE':
+            throw new ConflictError(
+              'You have already voted on this food pairing',
+            )
+          case 'FOOD_NOT_FOUND':
+            throw new ValidationError('One or both foods not found')
+          case 'INVALID_VOTE':
+            throw new ValidationError(voteError.message)
+          case 'RETRY_EXHAUSTED':
+            throw new InternalServerError(
+              'Vote processing failed due to high concurrency, please try again',
+            )
+        }
       }
-    }
 
-    return c.json(
-      {
-        error: 'Internal Server Error',
-        message: 'Failed to process vote',
-        code: 500,
-      },
-      500,
-    )
-  }
-})
+      throw new InternalServerError('Failed to process vote')
+    }
+  }),
+)
 
 // GET /api/votes/stats/:pairKey - Returns voting statistics for a specific pairing
-app.get('/api/votes/stats/:pairKey', async (c) => {
-  try {
+app.get(
+  '/api/votes/stats/:pairKey',
+  asyncHandler(async (c) => {
     // Check authentication
-    const currentUser = c.get('user')
-    if (!currentUser) {
-      return c.json(
-        {
-          error: 'Unauthorized',
-          message: 'Authentication required',
-          code: 401,
-        },
-        401,
-      )
-    }
+    const currentUser = requireAuth(c)
 
     const pairKey = c.req.param('pairKey')
     if (!pairKey) {
-      return c.json(
-        {
-          error: 'Bad Request',
-          message: 'Pair key is required',
-          code: 400,
-        },
-        400,
-      )
+      throw new ValidationError('Pair key is required')
     }
 
     const db = getDb(c.env.DB)
 
     // Check if user has voted on this pairing (access control)
-    const userVote = await db
-      .select()
-      .from(vote)
-      .where(and(eq(vote.userId, currentUser.id), eq(vote.pairKey, pairKey)))
-      .limit(1)
-
-    if (userVote.length === 0) {
-      return c.json(
-        {
-          error: 'Forbidden',
-          message: 'You must vote on this pairing before viewing results',
-          code: 403,
-        },
-        403,
-      )
-    }
+    await requireVoteAccess(
+      db,
+      currentUser.id,
+      pairKey,
+      'You must vote on this pairing before viewing results',
+    )
 
     // Get vote statistics
-    const voteStats = await getVoteStats(db, pairKey)
+    const voteStats = await withErrorHandling(async () => {
+      return await getVoteStats(db, pairKey)
+    }, 'retrieve vote statistics')
 
     return c.json(voteStats)
-  } catch (error) {
-    console.error('Failed to get vote stats:', error)
-    return c.json(
-      {
-        error: 'Internal Server Error',
-        message: 'Failed to retrieve vote statistics',
-        code: 500,
-      },
-      500,
-    )
-  }
-})
+  }),
+)
 
 // Helper function to get vote statistics with nationality breakdown
 async function getVoteStats(db: ReturnType<typeof getDb>, pairKey: string) {
@@ -544,95 +394,28 @@ async function getVoteStats(db: ReturnType<typeof getDb>, pairKey: string) {
 // Comments System Endpoints
 
 // POST /api/comments - Creates a new comment
-app.post('/api/comments', async (c) => {
-  try {
+app.post(
+  '/api/comments',
+  asyncHandler(async (c) => {
     // Check authentication
-    const currentUser = c.get('user')
-    if (!currentUser) {
-      return c.json(
-        {
-          error: 'Unauthorized',
-          message: 'Authentication required',
-          code: 401,
-        },
-        401,
-      )
-    }
+    const currentUser = requireAuth(c)
 
     // Parse and validate request body
     const body = await c.req.json()
-    const validationResult = CommentRequestSchema.safeParse(body)
-
-    if (!validationResult.success) {
-      return c.json(
-        {
-          error: 'Bad Request',
-          message: 'Invalid comment data',
-          code: 400,
-          details: validationResult.error.issues,
-        },
-        400,
-      )
-    }
-
-    const commentData = validationResult.data
-
-    // Validate result and winnerFoodId consistency
-    if (commentData.result === 'win' && !commentData.winnerFoodId) {
-      return c.json(
-        {
-          error: 'Bad Request',
-          message: 'Winner food ID is required for win results',
-          code: 400,
-        },
-        400,
-      )
-    }
-
-    if (commentData.result === 'tie' && commentData.winnerFoodId) {
-      return c.json(
-        {
-          error: 'Bad Request',
-          message: 'Winner food ID should not be provided for tie results',
-          code: 400,
-        },
-        400,
-      )
-    }
+    const commentData = validateRequest(CommentRequestSchema, body)
 
     const db = getDb(c.env.DB)
 
     // Check if user has voted on this pairing (access control)
-    const userVote = await db
-      .select()
-      .from(vote)
-      .where(
-        and(
-          eq(vote.userId, currentUser.id),
-          eq(vote.pairKey, commentData.pairKey),
-        ),
-      )
-      .limit(1)
+    await requireVoteAccess(
+      db,
+      currentUser.id,
+      commentData.pairKey,
+      'You must vote on this pairing before commenting',
+    )
 
-    if (userVote.length === 0) {
-      return c.json(
-        {
-          error: 'Forbidden',
-          message: 'You must vote on this pairing before commenting',
-          code: 403,
-        },
-        403,
-      )
-    }
-
-    // Sanitize content (basic XSS prevention)
-    const sanitizedContent = commentData.content
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#x27;')
-      .replace(/\//g, '&#x2F;')
-      .trim()
+    // Sanitize content (XSS prevention)
+    const sanitizedContent = sanitizeContent(commentData.content)
 
     // Create comment
     const commentId = crypto.randomUUID()
@@ -646,82 +429,48 @@ app.post('/api/comments', async (c) => {
       createdAt: new Date().toISOString(),
     }
 
-    const result = await withDbErrorHandling(async () => {
+    const result = await withErrorHandling(async () => {
       const insertedComments = await db
         .insert(comment)
         .values(newComment)
         .returning()
 
       return insertedComments[0]
-    }, 'Create comment')
+    }, 'create comment')
 
     return c.json(result)
-  } catch (error) {
-    console.error('Failed to create comment:', error)
-    return c.json(
-      {
-        error: 'Internal Server Error',
-        message: 'Failed to create comment',
-        code: 500,
-      },
-      500,
-    )
-  }
-})
+  }),
+)
 
 // GET /api/comments/:pairKey - Returns recent comments for a food pairing
-app.get('/api/comments/:pairKey', async (c) => {
-  try {
+app.get(
+  '/api/comments/:pairKey',
+  asyncHandler(async (c) => {
     // Check authentication
-    const currentUser = c.get('user')
-    if (!currentUser) {
-      return c.json(
-        {
-          error: 'Unauthorized',
-          message: 'Authentication required',
-          code: 401,
-        },
-        401,
-      )
-    }
+    const currentUser = requireAuth(c)
 
     const pairKey = c.req.param('pairKey')
     if (!pairKey) {
-      return c.json(
-        {
-          error: 'Bad Request',
-          message: 'Pair key is required',
-          code: 400,
-        },
-        400,
-      )
+      throw new ValidationError('Pair key is required')
     }
+
+    // Validate query parameters
+    const queryParams = validateRequest(PaginationQuerySchema, {
+      limit: c.req.query('limit'),
+      cursor: c.req.query('cursor'),
+    })
 
     const db = getDb(c.env.DB)
 
     // Check if user has voted on this pairing (access control)
-    const userVote = await db
-      .select()
-      .from(vote)
-      .where(and(eq(vote.userId, currentUser.id), eq(vote.pairKey, pairKey)))
-      .limit(1)
+    await requireVoteAccess(
+      db,
+      currentUser.id,
+      pairKey,
+      'You must vote on this pairing before viewing comments',
+    )
 
-    if (userVote.length === 0) {
-      return c.json(
-        {
-          error: 'Forbidden',
-          message: 'You must vote on this pairing before viewing comments',
-          code: 403,
-        },
-        403,
-      )
-    }
-
-    // Get query parameters
-    const limit = Math.min(parseInt(c.req.query('limit') || '20'), 100)
-    const cursor = c.req.query('cursor')
-
-    const result = await withDbErrorHandling(async () => {
+    const result = await withErrorHandling(async () => {
       // Get comments with nationality from user profile
       const baseQuery = db
         .select({
@@ -736,12 +485,12 @@ app.get('/api/comments/:pairKey', async (c) => {
         .from(comment)
         .leftJoin(user, eq(comment.userId, user.id))
         .orderBy(desc(comment.createdAt))
-        .limit(limit)
+        .limit(queryParams.limit)
 
-      const whereConditions = cursor
+      const whereConditions = queryParams.cursor
         ? and(
             eq(comment.pairKey, pairKey),
-            sql`${comment.createdAt} < ${cursor}`,
+            sql`${comment.createdAt} < ${queryParams.cursor}`,
           )
         : eq(comment.pairKey, pairKey)
 
@@ -774,21 +523,11 @@ app.get('/api/comments/:pairKey', async (c) => {
       }))
 
       return protectedComments
-    }, 'Get comments')
+    }, 'retrieve comments')
 
     return c.json(result)
-  } catch (error) {
-    console.error('Failed to get comments:', error)
-    return c.json(
-      {
-        error: 'Internal Server Error',
-        message: 'Failed to retrieve comments',
-        code: 500,
-      },
-      500,
-    )
-  }
-})
+  }),
+)
 
 // Test endpoint
 app.get('/api/', (c) =>

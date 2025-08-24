@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
 import { useFoodPair, useVoteMutation } from '@/hooks'
+import { ErrorMessage } from '@/components/ErrorMessage'
+import { LoadingSpinner, FoodCardSkeleton } from '@/components/LoadingSpinner'
 import {
   createPairKey,
   normalizeFoodIds,
@@ -134,7 +136,7 @@ export function FoodComparison() {
       })
     } catch (error) {
       console.error('Vote submission failed:', error)
-      // TODO: Show error toast/notification
+      // Error is handled by the mutation's onError and displayed in the UI
     }
   }
 
@@ -142,23 +144,34 @@ export function FoodComparison() {
 
   if (error) {
     return (
-      <div className="text-center space-y-4">
-        <h2 className="text-2xl font-bold text-destructive">
-          Error Loading Foods
-        </h2>
-        <p className="text-muted-foreground">
-          Failed to load food comparison. Please try again.
-        </p>
-        <Button onClick={() => refetch()}>Try Again</Button>
+      <div className="max-w-2xl mx-auto">
+        <ErrorMessage
+          error={error}
+          onRetry={() => refetch()}
+          showDetails={process.env.NODE_ENV === 'development'}
+        />
       </div>
     )
   }
 
   if (isPairLoading || !foodPair) {
     return (
-      <div className="text-center space-y-4">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto"></div>
-        <p className="text-muted-foreground">Loading food comparison...</p>
+      <div className="space-y-8">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-2">
+            Which Korean food do you prefer?
+          </h2>
+          <p className="text-muted-foreground">Loading food comparison...</p>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+          <FoodCardSkeleton />
+          <FoodCardSkeleton />
+        </div>
+
+        <div className="text-center">
+          <LoadingSpinner message="Loading foods..." />
+        </div>
       </div>
     )
   }
@@ -196,8 +209,12 @@ export function FoodComparison() {
       />
 
       {voteMutation.error && (
-        <div className="text-center text-destructive">
-          <p>Failed to submit vote. Please try again.</p>
+        <div className="max-w-md mx-auto">
+          <ErrorMessage
+            error={voteMutation.error}
+            onRetry={() => voteMutation.reset()}
+            showDetails={process.env.NODE_ENV === 'development'}
+          />
         </div>
       )}
     </div>

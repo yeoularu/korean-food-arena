@@ -1,5 +1,8 @@
 import { useLeaderboard } from '@/hooks'
+import { ErrorMessage, AuthErrorMessage } from '@/components/ErrorMessage'
+import { LeaderboardSkeleton } from '@/components/LoadingSpinner'
 import type { Food } from '@/lib/types'
+import { isApiError } from '@/lib/types'
 
 interface LeaderboardItemProps {
   food: Food
@@ -53,45 +56,25 @@ function LeaderboardItem({ food, position }: LeaderboardItemProps) {
   )
 }
 
-function LeaderboardSkeleton() {
-  return (
-    <div className="space-y-4">
-      {Array.from({ length: 10 }).map((_, i) => (
-        <div
-          key={i}
-          className="flex items-center space-x-4 p-4 border rounded-lg"
-        >
-          <div className="w-12 h-8 bg-muted rounded animate-pulse"></div>
-          <div className="w-16 h-16 bg-muted rounded-lg animate-pulse"></div>
-          <div className="flex-grow space-y-2">
-            <div className="h-5 bg-muted rounded animate-pulse w-3/4"></div>
-            <div className="h-4 bg-muted rounded animate-pulse w-1/2"></div>
-          </div>
-          <div className="w-16 h-8 bg-muted rounded animate-pulse"></div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
 export function Leaderboard() {
   const { data: foods, isLoading, error, refetch } = useLeaderboard()
 
   if (error) {
+    if (isApiError(error) && error.code === 401) {
+      return (
+        <div className="max-w-2xl mx-auto">
+          <AuthErrorMessage />
+        </div>
+      )
+    }
+
     return (
-      <div className="text-center space-y-4">
-        <h2 className="text-2xl font-bold text-destructive">
-          Error Loading Leaderboard
-        </h2>
-        <p className="text-muted-foreground">
-          Failed to load the food rankings. Please try again.
-        </p>
-        <button
-          onClick={() => refetch()}
-          className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
-        >
-          Try Again
-        </button>
+      <div className="max-w-2xl mx-auto">
+        <ErrorMessage
+          error={error}
+          onRetry={() => refetch()}
+          showDetails={process.env.NODE_ENV === 'development'}
+        />
       </div>
     )
   }

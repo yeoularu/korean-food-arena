@@ -113,3 +113,17 @@ export interface ApiError {
   code: number
   details?: Record<string, unknown>
 }
+
+// Type guard to check if an error is an ApiError
+export function isApiError(error: unknown): error is ApiError {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'error' in error &&
+    'message' in error &&
+    'code' in error &&
+    typeof (error as Record<string, unknown>).error === 'string' &&
+    typeof (error as Record<string, unknown>).message === 'string' &&
+    typeof (error as Record<string, unknown>).code === 'number'
+  )
+}

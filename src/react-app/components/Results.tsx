@@ -3,7 +3,10 @@ import { useNavigate } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { useVoteStats, useComments, useCommentMutation } from '@/hooks'
+import { ErrorMessage, AuthErrorMessage } from '@/components/ErrorMessage'
+import { LoadingSpinner, CardSkeleton } from '@/components/LoadingSpinner'
 import type { VoteStats, Comment } from '@/lib/types'
+import { isApiError } from '@/lib/types'
 
 interface VoteStatsDisplayProps {
   stats: VoteStats
@@ -164,9 +167,11 @@ function CommentSection({ pairKey, comments, isLoading }: CommentSectionProps) {
       </form>
 
       {commentMutation.error && (
-        <div className="text-sm text-destructive">
-          Failed to post comment. Please try again.
-        </div>
+        <ErrorMessage
+          error={commentMutation.error}
+          onRetry={() => commentMutation.reset()}
+          className="text-sm"
+        />
       )}
 
       <div className="space-y-3">
@@ -217,33 +222,57 @@ export function Results({ pairKey }: ResultsProps) {
     isLoading: statsLoading,
     error: statsError,
   } = useVoteStats(pairKey)
-  const {
-    data: comments = [],
-    isLoading: commentsLoading,
-    error: commentsError,
-  } = useComments(pairKey)
+  const { data: comments = [], isLoading: commentsLoading } =
+    useComments(pairKey)
 
   const handleContinue = () => {
     navigate({ to: '/' })
   }
 
-  if (statsError || commentsError) {
+  // Handle errors with appropriate messages
+  if (statsError) {
+    if (isApiError(statsError) && statsError.code === 403) {
+      return (
+        <div className="max-w-2xl mx-auto">
+          <ErrorMessage
+            error="You need to vote on this comparison before viewing results."
+            onRetry={() => navigate({ to: '/' })}
+          />
+        </div>
+      )
+    }
+    if (isApiError(statsError) && statsError.code === 401) {
+      return (
+        <div className="max-w-2xl mx-auto">
+          <AuthErrorMessage />
+        </div>
+      )
+    }
     return (
-      <div className="text-center space-y-4">
-        <h2 className="text-2xl font-bold text-destructive">Access Denied</h2>
-        <p className="text-muted-foreground">
-          You need to vote on this comparison before viewing results.
-        </p>
-        <Button onClick={() => navigate({ to: '/' })}>Go Back to Voting</Button>
+      <div className="max-w-2xl mx-auto">
+        <ErrorMessage
+          error={statsError}
+          onRetry={() => navigate({ to: '/' })}
+          showDetails={process.env.NODE_ENV === 'development'}
+        />
       </div>
     )
   }
 
   if (statsLoading) {
     return (
-      <div className="text-center space-y-4">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto"></div>
-        <p className="text-muted-foreground">Loading results...</p>
+      <div className="max-w-4xl mx-auto space-y-8">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold">Comparison Results</h1>
+          <p className="text-muted-foreground mt-2">Loading results...</p>
+        </div>
+
+        <CardSkeleton />
+        <CardSkeleton />
+
+        <div className="text-center">
+          <LoadingSpinner message="Loading vote statistics..." />
+        </div>
       </div>
     )
   }
