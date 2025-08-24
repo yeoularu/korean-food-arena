@@ -54,9 +54,9 @@ export function useCommentMutation() {
       return executeWithRetry(() => apiClient.createComment(comment))
     },
     onSuccess: (_, variables) => {
-      // Invalidate comments for this specific pair
+      // Invalidate comments for this specific pair (use stable prefix to match any limit)
       queryClient.invalidateQueries({
-        queryKey: commentQueryKeys.byPairKey(variables.pairKey),
+        queryKey: ['comments', variables.pairKey],
       })
 
       // Show success message
