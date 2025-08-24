@@ -24,6 +24,7 @@ import {
   InternalServerError,
   validateRequest,
 } from './lib/errorHandling'
+import { requireAdminAuth } from './lib/adminAuth'
 
 const app = new Hono<{ Bindings: Env; Variables: AuthVariables }>()
 
@@ -418,9 +419,7 @@ app.post(
     const sanitizedContent = sanitizeContent(commentData.content)
 
     // Create comment
-    const commentId = crypto.randomUUID()
     const newComment = {
-      id: commentId,
       pairKey: commentData.pairKey,
       result: commentData.result,
       winnerFoodId: commentData.winnerFoodId || null,
@@ -529,10 +528,37 @@ app.get(
   }),
 )
 
-// Test endpoint
-app.get('/api/', (c) =>
-  c.json({
-    name: JSON.stringify({ user: c.get('user'), session: c.get('session') }),
+// Admin endpoints for database seeding
+// Requires c.env.ADMIN_API_KEY to be configured. See `src/worker/lib/adminAuth.ts`.
+// Example curl (local dev at http://localhost:5173):
+// Only supported header:
+// curl -X POST 'http://localhost:5173/api/admin/seed' -H 'x-admin-api-key: YOUR_ADMIN_API_KEY'
+// curl 'http://localhost:5173/api/admin/seed/status' -H 'x-admin-api-key: YOUR_ADMIN_API_KEY'
+app.post(
+  '/api/admin/seed',
+  requireAdminAuth(),
+  asyncHandler(async (c) => {
+    const db = getDb(c.env.DB)
+    const { DatabaseSeeder } = await import('./lib/seedDatabase')
+
+    const seeder = new DatabaseSeeder(db)
+    const result = await seeder.seedFoods()
+
+    return c.json(result, result.success ? 200 : 500)
+  }),
+)
+
+app.get(
+  '/api/admin/seed/status',
+  requireAdminAuth(),
+  asyncHandler(async (c) => {
+    const db = getDb(c.env.DB)
+    const { DatabaseSeeder } = await import('./lib/seedDatabase')
+
+    const seeder = new DatabaseSeeder(db)
+    const status = await seeder.getSeedingStatus()
+
+    return c.json(status)
   }),
 )
 

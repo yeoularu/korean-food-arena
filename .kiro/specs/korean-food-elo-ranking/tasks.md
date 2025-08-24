@@ -137,7 +137,7 @@
     - Document that nationality changes affect historical statistics
     - _Requirements: 3.4, 3.5, 4.2, 4.4, 5.3, 6.3, 6.5, 6.6_
 
-- [ ] 7. Seed database with Korean food data
+- [x] 7. Seed database with Korean food data
   - Create comprehensive list of popular Korean foods with descriptions
   - Source high-quality food images and host under public/ or external CDN for v1 (consider Cloudflare Images in Phase 2)
   - Implement database seeding script with initial ELO scores (1200)

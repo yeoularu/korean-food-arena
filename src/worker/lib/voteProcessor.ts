@@ -44,13 +44,10 @@ export class VoteProcessor {
     // Validate the vote request
     this.validateVoteRequest(voteRequest)
 
-    // Generate vote ID
-    const voteId = crypto.randomUUID()
-
     // Attempt to process the vote with retry logic
     for (let attempt = 0; attempt < VoteProcessor.MAX_RETRIES; attempt++) {
       try {
-        return await this.attemptVoteProcessing(voteId, voteRequest)
+        return await this.attemptVoteProcessing(voteRequest)
       } catch (error) {
         // Don't retry for certain errors
         if (this.isNonRetryableError(error)) {
@@ -79,7 +76,6 @@ export class VoteProcessor {
    * Attempt to process a single vote within a transaction
    */
   private async attemptVoteProcessing(
-    voteId: string,
     voteRequest: VoteRequest,
   ): Promise<VoteResult> {
     return await this.db.transaction(async (tx) => {
@@ -239,7 +235,6 @@ export class VoteProcessor {
 
       // Insert the vote record
       const newVote: typeof vote.$inferInsert = {
-        id: voteId,
         pairKey: voteRequest.pairKey,
         foodLowId: voteRequest.foodLowId,
         foodHighId: voteRequest.foodHighId,

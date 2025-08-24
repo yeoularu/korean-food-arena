@@ -11,20 +11,26 @@ import { user } from './auth-schema'
 
 // Custom Food table
 export const food = sqliteTable('food', {
-  id: text('id').primaryKey(),
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
   name: text('name').notNull(),
   imageUrl: text('image_url').notNull(),
   eloScore: integer('elo_score').default(1200).notNull(),
   totalVotes: integer('total_votes').default(0).notNull(), // Total number of votes including skip votes
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`), // ISO 8601 format
-  updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`), // ISO 8601 format
+  updatedAt: text('updated_at')
+    .default(sql`CURRENT_TIMESTAMP`)
+    .$onUpdate(() => new Date().toISOString()), // Auto-update on changes
 })
 
 // Custom Vote table
 export const vote = sqliteTable(
   'vote',
   {
-    id: text('id').primaryKey(), // Use cuid2 or ulid for better performance
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
     pairKey: text('pair_key').notNull(), // Normalized: min(foodA,foodB)+'_'+max(foodA,foodB)
     foodLowId: text('food_low_id').references(() => food.id), // Normalized min ID
     foodHighId: text('food_high_id').references(() => food.id), // Normalized max ID
@@ -47,7 +53,9 @@ export const vote = sqliteTable(
 
 // Custom Comment table
 export const comment = sqliteTable('comment', {
-  id: text('id').primaryKey(), // Use cuid2 or ulid for better performance
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
   pairKey: text('pair_key').notNull(), // Same normalized pairKey as votes
   result: text('result', {
     enum: ['win', 'tie'],

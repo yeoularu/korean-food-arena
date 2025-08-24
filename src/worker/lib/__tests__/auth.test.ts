@@ -6,6 +6,7 @@ const mockEnv: Env = {
   DB: {} as D1Database, // This would be mocked properly in a real test
   BETTER_AUTH_SECRET: 'test-secret',
   BETTER_AUTH_URL: 'http://localhost:5173',
+  ADMIN_API_KEY: 'test-admin-key',
   CLOUDFLARE_ACCOUNT_ID: '',
   CLOUDFLARE_DATABASE_ID: '',
   CLOUDFLARE_D1_TOKEN: '',
