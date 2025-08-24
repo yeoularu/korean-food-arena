@@ -35,6 +35,89 @@ app.on(['POST', 'GET'], '/api/auth/*', (c) => {
   return auth.handler(c.req.raw)
 })
 
+// Custom auth endpoint for updating nationality
+app.post('/api/auth/update-nationality', async (c) => {
+  try {
+    // Check authentication
+    const currentUser = c.get('user')
+    if (!currentUser) {
+      return c.json(
+        {
+          error: 'Unauthorized',
+          message: 'Authentication required',
+          code: 401,
+        },
+        401,
+      )
+    }
+
+    // Parse and validate request body
+    const body = await c.req.json()
+    const nationalitySchema = z.object({
+      nationality: z.string().optional(),
+    })
+
+    const validationResult = nationalitySchema.safeParse(body)
+    if (!validationResult.success) {
+      return c.json(
+        {
+          error: 'Bad Request',
+          message: 'Invalid nationality data',
+          code: 400,
+          details: validationResult.error.issues,
+        },
+        400,
+      )
+    }
+
+    const { nationality } = validationResult.data
+
+    // Update user nationality in database
+    const db = getDb(c.env.DB)
+    const result = await withDbErrorHandling(async () => {
+      const updatedUsers = await db
+        .update(user)
+        .set({
+          nationality: nationality || 'unknown',
+        })
+        .where(eq(user.id, currentUser.id))
+        .returning()
+
+      return updatedUsers[0]
+    }, 'Update user nationality')
+
+    if (!result) {
+      return c.json(
+        {
+          error: 'Not Found',
+          message: 'User not found',
+          code: 404,
+        },
+        404,
+      )
+    }
+
+    // Return updated user data
+    return c.json({
+      user: {
+        ...currentUser,
+        nationality: result.nationality,
+      },
+      message: 'Nationality updated successfully',
+    })
+  } catch (error) {
+    console.error('Failed to update nationality:', error)
+    return c.json(
+      {
+        error: 'Internal Server Error',
+        message: 'Failed to update nationality',
+        code: 500,
+      },
+      500,
+    )
+  }
+})
+
 // Food Management Endpoints
 
 // GET /api/foods/random-pair - Returns two random foods for comparison

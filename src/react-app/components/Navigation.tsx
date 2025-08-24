@@ -29,6 +29,15 @@ export function Navigation() {
               >
                 Leaderboard
               </Link>
+              <Link
+                to="/profile"
+                className="text-foreground/80 hover:text-foreground transition-colors"
+                activeProps={{
+                  className: 'text-foreground font-medium',
+                }}
+              >
+                Profile
+              </Link>
             </div>
           </div>
           <div className="flex items-center space-x-4">

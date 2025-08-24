@@ -1,5 +1,31 @@
-// API Types based on the design document
+// Extended user type that includes nationality field
+export interface User {
+  id: string
+  email: string
+  emailVerified: boolean
+  name: string
+  createdAt: Date
+  updatedAt: Date
+  image?: string | null
+  isAnonymous?: boolean | null
+  nationality?: string | null
+}
 
+export interface Session {
+  id: string
+  userId: string
+  expiresAt: Date
+  token: string
+  ipAddress?: string | null
+  userAgent?: string | null
+}
+
+export interface SessionData {
+  user: User
+  session: Session
+}
+
+// Food types
 export interface Food {
   id: string
   name: string
@@ -10,6 +36,49 @@ export interface Food {
   updatedAt: string
 }
 
+// Vote types
+export interface Vote {
+  id: string
+  pairKey: string
+  foodLowId: string
+  foodHighId: string
+  presentedLeftId: string
+  presentedRightId: string
+  result: 'win' | 'tie' | 'skip'
+  winnerFoodId?: string
+  userId: string
+  createdAt: string
+}
+
+// Comment types
+export interface Comment {
+  id: string
+  pairKey: string
+  result: 'win' | 'tie'
+  winnerFoodId?: string
+  content: string
+  createdAt: string
+  nationality?: string
+}
+
+// Vote statistics
+export interface VoteStats {
+  totalVotes: number
+  countsByFoodId: Record<string, number>
+  tieCount: number
+  skipCount: number
+  percentageByFoodId: Record<string, number>
+  tiePercentage: number
+  nationalityBreakdown: Record<
+    string,
+    {
+      byFoodId: Record<string, number>
+      tiePercentage: number
+    }
+  >
+  countryCodeStandard: 'ISO-3166-1-alpha-2'
+}
+// API Request/Response types
 export interface FoodPair {
   presentedLeft: Food
   presentedRight: Food
@@ -26,35 +95,9 @@ export interface VoteRequest {
 }
 
 export interface VoteResponse {
+  vote: Vote
   updatedScores: Record<string, number>
   voteStats: VoteStats
-}
-
-export interface VoteStats {
-  totalVotes: number
-  countsByFoodId: Record<string, number>
-  tieCount: number
-  skipCount: number
-  percentageByFoodId: Record<string, number>
-  tiePercentage: number
-  nationalityBreakdown: Record<
-    string,
-    {
-      byFoodId: Record<string, number>
-      tiePercentage: number
-    }
-  >
-}
-
-export interface Comment {
-  id: string
-  pairKey: string
-  result: 'win' | 'tie'
-  winnerFoodId?: string
-  content: string
-  userId: string
-  nationality?: string
-  createdAt: string
 }
 
 export interface CommentRequest {
@@ -68,5 +111,5 @@ export interface ApiError {
   error: string
   message: string
   code: number
-  details?: unknown
+  details?: Record<string, unknown>
 }

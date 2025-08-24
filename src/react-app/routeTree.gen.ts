@@ -9,10 +9,16 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as LeaderboardRouteImport } from './routes/leaderboard'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ResultsPairKeyRouteImport } from './routes/results/$pairKey'
 
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LeaderboardRoute = LeaderboardRouteImport.update({
   id: '/leaderboard',
   path: '/leaderboard',
@@ -32,35 +38,46 @@ const ResultsPairKeyRoute = ResultsPairKeyRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/leaderboard': typeof LeaderboardRoute
+  '/profile': typeof ProfileRoute
   '/results/$pairKey': typeof ResultsPairKeyRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/leaderboard': typeof LeaderboardRoute
+  '/profile': typeof ProfileRoute
   '/results/$pairKey': typeof ResultsPairKeyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/leaderboard': typeof LeaderboardRoute
+  '/profile': typeof ProfileRoute
   '/results/$pairKey': typeof ResultsPairKeyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/leaderboard' | '/results/$pairKey'
+  fullPaths: '/' | '/leaderboard' | '/profile' | '/results/$pairKey'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/leaderboard' | '/results/$pairKey'
-  id: '__root__' | '/' | '/leaderboard' | '/results/$pairKey'
+  to: '/' | '/leaderboard' | '/profile' | '/results/$pairKey'
+  id: '__root__' | '/' | '/leaderboard' | '/profile' | '/results/$pairKey'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   LeaderboardRoute: typeof LeaderboardRoute
+  ProfileRoute: typeof ProfileRoute
   ResultsPairKeyRoute: typeof ResultsPairKeyRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/leaderboard': {
       id: '/leaderboard'
       path: '/leaderboard'
@@ -88,6 +105,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LeaderboardRoute: LeaderboardRoute,
+  ProfileRoute: ProfileRoute,
   ResultsPairKeyRoute: ResultsPairKeyRoute,
 }
 export const routeTree = rootRouteImport

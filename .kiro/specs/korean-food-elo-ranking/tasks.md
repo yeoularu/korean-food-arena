@@ -116,21 +116,21 @@
     - Add responsive design for mobile and desktop viewing
     - _Requirements: 2.1, 2.2, 2.3_
 
-- [ ] 6. Integrate authentication and user profile management
-  - [ ] 6.1 Implement anonymous user flow with EnsureSession pattern
+- [x] 6. Integrate authentication and user profile management
+  - [x] 6.1 Implement anonymous user flow with EnsureSession pattern
     - Set up EnsureSession component to wrap RouterProvider for automatic anonymous session creation
     - Handle session persistence across page reloads
     - Test anonymous user voting and commenting functionality
     - _Requirements: 6.1, 6.2, 6.4_
 
-  - [ ] 6.2 Create user profile component for nationality management
+  - [x] 6.2 Create user profile component for nationality management
     - Implement User Profile component with optional nationality setting
     - Add nationality update functionality through Better-auth API
     - Create POST /api/auth/update-nationality endpoint
     - Ensure nationality changes are reflected in future analytics
     - _Requirements: 6.1, 6.2, 6.3, 6.5, 6.6_
 
-  - [ ] 6.3 Implement nationality-based analytics
+  - [x] 6.3 Implement nationality-based analytics
     - Create analytics queries that join vote/comment with user.nationality
     - Display nationality breakdowns in results interface
     - Handle cases where users don't have nationality set

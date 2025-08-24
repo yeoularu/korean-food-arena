@@ -61,6 +61,10 @@ function VoteStatsDisplay({ stats }: VoteStatsDisplayProps) {
       {Object.keys(stats.nationalityBreakdown).length > 0 && (
         <div className="mt-6">
           <h4 className="text-md font-medium mb-3">Breakdown by Nationality</h4>
+          <p className="text-xs text-muted-foreground mb-3">
+            Based on current nationality settings. Groups with fewer than 5
+            users are shown as "Other".
+          </p>
           <div className="space-y-3">
             {Object.entries(stats.nationalityBreakdown).map(
               ([nationality, data]) => (
