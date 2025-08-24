@@ -170,8 +170,8 @@ app.post(
         userId: currentUser.id,
       })
 
-      // Get updated vote statistics
-      const voteStats = await getVoteStats(db, voteData.pairKey)
+      // Get updated vote statistics (including current user's vote)
+      const voteStats = await getVoteStats(db, voteData.pairKey, currentUser.id)
 
       return c.json({
         vote: result.vote,
@@ -226,9 +226,9 @@ app.get(
       'You must vote on this pairing before viewing results',
     )
 
-    // Get vote statistics
+    // Get vote statistics (including current user's vote)
     const voteStats = await withErrorHandling(async () => {
-      return await getVoteStats(db, pairKey)
+      return await getVoteStats(db, pairKey, currentUser.id)
     }, 'retrieve vote statistics')
 
     return c.json(voteStats)
@@ -236,7 +236,11 @@ app.get(
 )
 
 // Helper function to get vote statistics with nationality breakdown
-async function getVoteStats(db: ReturnType<typeof getDb>, pairKey: string) {
+async function getVoteStats(
+  db: ReturnType<typeof getDb>,
+  pairKey: string,
+  currentUserId?: string,
+) {
   const MIN_GROUP_SIZE = 5
 
   // Derive the two food IDs from the pairKey and fetch their display names
@@ -395,6 +399,31 @@ async function getVoteStats(db: ReturnType<typeof getDb>, pairKey: string) {
     }
   }
 
+  // Current user's latest vote for this pair (non-skip) to lock comment selection
+  let userVoteForComment: { result: 'win' | 'tie'; winnerFoodId?: string } | null =
+    null
+  if (currentUserId) {
+    const userVoteRows = await db
+      .select({
+        result: vote.result,
+        winnerFoodId: vote.winnerFoodId,
+        createdAt: vote.createdAt,
+      })
+      .from(vote)
+      .where(and(eq(vote.pairKey, pairKey), eq(vote.userId, currentUserId)))
+      .orderBy(desc(vote.createdAt))
+      .limit(1)
+
+    const uv = userVoteRows[0]
+    if (uv) {
+      if (uv.result === 'win' && uv.winnerFoodId) {
+        userVoteForComment = { result: 'win', winnerFoodId: uv.winnerFoodId }
+      } else if (uv.result === 'tie') {
+        userVoteForComment = { result: 'tie' }
+      }
+    }
+  }
+
   return {
     totalVotes,
     countsByFoodId,
@@ -405,6 +434,7 @@ async function getVoteStats(db: ReturnType<typeof getDb>, pairKey: string) {
     nationalityBreakdown,
     foodNamesById,
     countryCodeStandard: 'ISO-3166-1-alpha-2' as const,
+    userVoteForComment,
   }
 }
 

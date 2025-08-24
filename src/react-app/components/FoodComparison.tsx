@@ -129,6 +129,15 @@ export function FoodComparison() {
         winnerFoodId,
       })
 
+      // Persist the user's last vote for this pair so the Results page can preselect it
+      try {
+        const payload = { result, winnerFoodId }
+        sessionStorage.setItem(`lastVote:${pairKey}`, JSON.stringify(payload))
+      } catch (e) {
+        // Non-fatal if storage fails
+        console.warn('Failed to persist last vote to sessionStorage', e)
+      }
+
       // Navigate to results page with the pairKey
       navigate({
         to: '/results/$pairKey',

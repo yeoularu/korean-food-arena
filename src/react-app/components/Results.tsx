@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -111,11 +111,29 @@ interface CommentSectionProps {
   comments: Comment[]
   isLoading: boolean
   foodNamesById?: Record<string, string>
+  userVoteForComment?: { result: 'win' | 'tie'; winnerFoodId?: string } | null
 }
 
-function CommentSection({ pairKey, comments, isLoading, foodNamesById }: CommentSectionProps) {
+function CommentSection({ pairKey, comments, isLoading, foodNamesById, userVoteForComment }: CommentSectionProps) {
   const [newComment, setNewComment] = useState('')
+  // Default to 'tie' to avoid invalid payloads when user doesn't choose a winner
+  const [selectedResult, setSelectedResult] = useState<'win' | 'tie'>('tie')
+  const [selectedWinnerId, setSelectedWinnerId] = useState<string | undefined>(
+    undefined,
+  )
   const commentMutation = useCommentMutation()
+
+  // Prefer server-provided vote to lock selection; fallback stays 'tie' if absent
+  useEffect(() => {
+    if (!userVoteForComment) return
+    if (userVoteForComment.result === 'win' && userVoteForComment.winnerFoodId) {
+      setSelectedResult('win')
+      setSelectedWinnerId(userVoteForComment.winnerFoodId)
+    } else if (userVoteForComment.result === 'tie') {
+      setSelectedResult('tie')
+      setSelectedWinnerId(undefined)
+    }
+  }, [userVoteForComment])
 
   const handleSubmitComment = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -124,10 +142,17 @@ function CommentSection({ pairKey, comments, isLoading, foodNamesById }: Comment
     try {
       await commentMutation.mutateAsync({
         pairKey,
-        result: 'win', // This should be determined based on the user's actual vote
+        result: selectedResult,
+        winnerFoodId:
+          selectedResult === 'win' ? selectedWinnerId : undefined,
         content: newComment.trim(),
       })
       setNewComment('')
+      // If not locked by server vote, reset selection back to tie after successful submit
+      if (!userVoteForComment) {
+        setSelectedResult('tie')
+        setSelectedWinnerId(undefined)
+      }
     } catch (error) {
       console.error('Failed to submit comment:', error)
     }
@@ -145,9 +170,57 @@ function CommentSection({ pairKey, comments, isLoading, foodNamesById }: Comment
     )
   }
 
+  const locked = !!userVoteForComment
+
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold">Comments</h3>
+
+      {/* Vote context for this comment */}
+      <div className="space-y-2">
+        <p className="text-sm text-muted-foreground">Your vote for this comment</p>
+        {locked && (
+          <p className="text-xs text-muted-foreground">
+            Locked to your vote: {selectedResult === 'win' && selectedWinnerId
+              ? `Chose ${foodNamesById?.[selectedWinnerId] || selectedWinnerId}`
+              : 'Tie'}
+          </p>
+        )}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-6 space-y-2 sm:space-y-0">
+          {/* Food options (win) */}
+          {Object.entries(foodNamesById || {}).map(([id, name]) => (
+            <label key={id} className="inline-flex items-center space-x-2">
+              <input
+                type="radio"
+                name="comment-vote"
+                value={id}
+                checked={selectedResult === 'win' && selectedWinnerId === id}
+                disabled={locked}
+                onChange={() => {
+                  setSelectedResult('win')
+                  setSelectedWinnerId(id)
+                }}
+              />
+              <span className="text-sm">{name}</span>
+            </label>
+          ))}
+          {/* Tie option */}
+          <label className="inline-flex items-center space-x-2">
+            <input
+              type="radio"
+              name="comment-vote"
+              value="tie"
+              checked={selectedResult === 'tie'}
+              disabled={locked}
+              onChange={() => {
+                setSelectedResult('tie')
+                setSelectedWinnerId(undefined)
+              }}
+            />
+            <span className="text-sm">Tie</span>
+          </label>
+        </div>
+      </div>
 
       <form onSubmit={handleSubmitComment} className="space-y-2">
         <Textarea
@@ -163,7 +236,11 @@ function CommentSection({ pairKey, comments, isLoading, foodNamesById }: Comment
           </span>
           <Button
             type="submit"
-            disabled={!newComment.trim() || commentMutation.isPending}
+            disabled={
+              !newComment.trim() ||
+              commentMutation.isPending ||
+              (selectedResult === 'win' && !selectedWinnerId)
+            }
             size="sm"
           >
             {commentMutation.isPending ? 'Posting...' : 'Post Comment'}
@@ -310,6 +387,7 @@ export function Results({ pairKey }: ResultsProps) {
         comments={comments}
         isLoading={commentsLoading}
         foodNamesById={stats.foodNamesById}
+        userVoteForComment={stats.userVoteForComment}
       />
 
       <div className="text-center">

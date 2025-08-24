@@ -79,6 +79,8 @@ export interface VoteStats {
   // Added: map food IDs to their display names for rendering
   foodNamesById: Record<string, string>
   countryCodeStandard: 'ISO-3166-1-alpha-2'
+  // Added: current user's vote for this pair to lock comment selection
+  userVoteForComment?: { result: 'win' | 'tie'; winnerFoodId?: string } | null
 }
 // API Request/Response types
 export interface FoodPair {
