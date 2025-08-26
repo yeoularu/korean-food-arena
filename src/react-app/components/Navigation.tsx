@@ -86,7 +86,7 @@ export function Navigation() {
           <div className="md:hidden justify-self-center">
             <Link
               to="/"
-              className="block max-w-[60vw] truncate text-center text-lg font-bold text-foreground"
+              className="block truncate text-center text-base font-bold text-foreground"
             >
               🇰🇷 Korean Food Arena
             </Link>
