@@ -34,7 +34,7 @@ export function useUpdateNationality() {
 
   return useMutation({
     mutationFn: async (nationality?: string) => {
-      const response = await fetch('/api/auth/update-nationality', {
+      const response = await fetch('/api/user/update-nationality', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

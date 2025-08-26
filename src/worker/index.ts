@@ -55,7 +55,7 @@ app.on(['POST', 'GET'], '/api/auth/*', (c) => {
 
 // Custom auth endpoint for updating nationality
 app.post(
-  '/api/auth/update-nationality',
+  '/api/user/update-nationality',
   asyncHandler(async (c) => {
     // Check authentication
     const currentUser = requireAuth(c)
@@ -400,8 +400,10 @@ async function getVoteStats(
   }
 
   // Current user's latest vote for this pair (non-skip) to lock comment selection
-  let userVoteForComment: { result: 'win' | 'tie'; winnerFoodId?: string } | null =
-    null
+  let userVoteForComment: {
+    result: 'win' | 'tie'
+    winnerFoodId?: string
+  } | null = null
   if (currentUserId) {
     const userVoteRows = await db
       .select({

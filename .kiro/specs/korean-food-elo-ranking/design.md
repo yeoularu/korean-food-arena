@@ -254,11 +254,11 @@ GET /api/auth/session
 // Gets current session
 // Response: { user, session }
 
-// Custom endpoint for updating user nationality
-POST /api/auth/update-nationality
-// Updates user nationality through Better-auth server API
+// Custom Hono endpoint for updating user nationality (protected by Better-auth session)
+POST /api/user/update-nationality
+// Updates user nationality via protected Hono route (requires session)
 // Body: { nationality? }
-// Response: { user, session }
+// Response: { user, message }
 // Note: Nationality is optional and can be skipped entirely
 ```
 

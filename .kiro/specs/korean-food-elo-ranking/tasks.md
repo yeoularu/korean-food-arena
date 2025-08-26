@@ -125,8 +125,8 @@
 
   - [x] 6.2 Create user profile component for nationality management
     - Implement User Profile component with optional nationality setting
-    - Add nationality update functionality through Better-auth API
-    - Create POST /api/auth/update-nationality endpoint
+    - Add nationality update functionality via protected Hono endpoint (requires Better-auth session)
+    - Create POST /api/user/update-nationality endpoint
     - Ensure nationality changes are reflected in future analytics
     - _Requirements: 6.1, 6.2, 6.3, 6.5, 6.6_
 
