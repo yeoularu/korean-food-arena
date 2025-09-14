@@ -5,6 +5,7 @@ import {
   text,
   integer,
   uniqueIndex,
+  index,
 } from 'drizzle-orm/sqlite-core'
 import { sql } from 'drizzle-orm'
 import { user } from './auth-schema'
@@ -66,7 +67,10 @@ export const comment = sqliteTable('comment', {
     .notNull()
     .references(() => user.id), // References better-auth user table
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`), // ISO 8601 TEXT format
-})
+}, (table) => [
+  // Composite index for expanded comment queries: (winner_food_id, created_at DESC)
+  index('idx_comment_winner_food_created').on(table.winnerFoodId, table.createdAt),
+])
 
 // Type inference
 export type Food = typeof food.$inferSelect

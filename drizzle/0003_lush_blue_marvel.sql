@@ -1,0 +1,1 @@
+CREATE INDEX `idx_comment_winner_food_created` ON `comment` (`winner_food_id`,`created_at`);

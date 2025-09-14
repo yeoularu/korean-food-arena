@@ -61,6 +61,23 @@ export interface Comment {
   nationality?: string
 }
 
+// Enhanced comment interface with additional context fields for expanded comment visibility
+export interface EnhancedComment extends Comment {
+  // Additional context fields for expanded comment visibility
+  isCurrentPairing: boolean
+  otherFoodId: string // The other food in the commenter's pairing
+  otherFoodName: string // Name of the other food for display
+}
+
+// Structured API response for expanded comments
+export interface ExpandedCommentsResponse {
+  currentPairingComments: EnhancedComment[]
+  expandedComments: EnhancedComment[]
+  totalCount: number
+  hasMore: boolean
+  cursor?: string
+}
+
 // Vote statistics
 export interface VoteStats {
   totalVotes: number
@@ -109,6 +126,17 @@ export interface CommentRequest {
   result: 'win' | 'tie'
   winnerFoodId?: string
   content: string
+}
+
+// Request interface for expanded comments endpoint
+export interface ExpandedCommentsRequest {
+  pairKey: string
+  foodId1: string
+  foodId2: string
+  currentPairingLimit?: number
+  expandedLimit?: number
+  includeExpanded?: boolean
+  cursor?: string
 }
 
 export interface ApiError {
