@@ -82,6 +82,16 @@ Monitor your workers:
 npx wrangler tail
 ```
 
+## Documentation
+
+This project includes comprehensive documentation for developers:
+
+- **[API Documentation](docs/api-documentation.md)** - Complete API reference with examples
+- **[API Reference](docs/api-reference.md)** - Technical reference for TypeScript interfaces and usage patterns
+- **[Expanded Comments Feature](docs/expanded-comments-feature.md)** - Detailed guide for the enhanced comment system
+- **[Performance Monitoring](docs/performance-monitoring.md)** - Performance optimization and monitoring guide
+- **[Database Indexes](docs/database-indexes.md)** - Database optimization and indexing strategy
+
 ## Additional Resources
 
 - [Cloudflare Workers Documentation](https://developers.cloudflare.com/workers/)

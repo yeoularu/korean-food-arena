@@ -38,3 +38,14 @@ export function determineVoteResult(
 
   throw new Error('Invalid selection')
 }
+
+export function extractFoodIdsFromPairKey(pairKey: string): {
+  foodId1: string
+  foodId2: string
+} {
+  const parts = pairKey.split('_')
+  if (parts.length !== 2) {
+    throw new Error('Invalid pairKey format')
+  }
+  return { foodId1: parts[0], foodId2: parts[1] }
+}

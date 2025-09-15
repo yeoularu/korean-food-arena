@@ -1,11 +1,13 @@
-import { useState, useEffect } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { useVoteStats, useComments, useCommentMutation } from '@/hooks'
+import { useVoteStats } from '@/hooks'
 import { ErrorMessage, AuthErrorMessage } from '@/components/ErrorMessage'
 import { LoadingSpinner, CardSkeleton } from '@/components/LoadingSpinner'
-import type { VoteStats, Comment } from '@/lib/types'
+import { ExpandedComments } from '@/components/ExpandedComments'
+import { CommentCreation } from '@/components/CommentCreation'
+import { FlagDisplay } from '@/components/FlagDisplay'
+import { extractFoodIdsFromPairKey } from '@/lib/pair-utils'
+import type { VoteStats } from '@/lib/types'
 import { isApiError } from '@/lib/types'
 
 interface VoteStatsDisplayProps {
@@ -72,223 +74,64 @@ function VoteStatsDisplay({ stats }: VoteStatsDisplayProps) {
           </p>
           <div className="space-y-3">
             {Object.entries(stats.nationalityBreakdown).map(
-              ([nationality, data]) => (
-                <div key={nationality} className="border rounded-lg p-3">
-                  <h5 className="text-sm font-medium mb-2">
-                    {nationality === 'unknown' ? 'Not specified' : nationality}
-                  </h5>
-                  <div className="space-y-1">
-                    {Object.entries(data.byFoodId).map(([foodId, count]) => (
-                      <div
-                        key={foodId}
-                        className="flex justify-between text-xs"
-                      >
-                        <span>
-                          {stats.foodNamesById?.[foodId] || `Food ${foodId}`}
+              ([nationality, data]) => {
+                // Handle special cases for nationality display
+                const getNationalityDisplay = (nat: string) => {
+                  if (nat === 'unknown') {
+                    return (
+                      <span className="inline-flex items-center gap-1">
+                        <span className="text-base" aria-hidden="true">
+                          🌍
                         </span>
-                        <span>{count} votes</span>
-                      </div>
-                    ))}
-                    {data.tiePercentage > 0 && (
-                      <div className="flex justify-between text-xs">
-                        <span>Tie</span>
-                        <span>{data.tiePercentage.toFixed(1)}%</span>
-                      </div>
-                    )}
+                        <span>Not specified</span>
+                      </span>
+                    )
+                  }
+                  if (nat === 'Other') {
+                    return (
+                      <span className="inline-flex items-center gap-1">
+                        <span className="text-base" aria-hidden="true">
+                          🌐
+                        </span>
+                        <span>Other</span>
+                      </span>
+                    )
+                  }
+                  // For country codes, use FlagDisplay component
+                  return <FlagDisplay countryCode={nat} showName size="sm" />
+                }
+
+                return (
+                  <div key={nationality} className="border rounded-lg p-3">
+                    <h5 className="text-sm font-medium mb-2">
+                      {getNationalityDisplay(nationality)}
+                    </h5>
+                    <div className="space-y-1">
+                      {Object.entries(data.byFoodId).map(([foodId, count]) => (
+                        <div
+                          key={foodId}
+                          className="flex justify-between text-xs"
+                        >
+                          <span>
+                            {stats.foodNamesById?.[foodId] || `Food ${foodId}`}
+                          </span>
+                          <span>{count} votes</span>
+                        </div>
+                      ))}
+                      {data.tiePercentage > 0 && (
+                        <div className="flex justify-between text-xs">
+                          <span>Tie</span>
+                          <span>{data.tiePercentage.toFixed(1)}%</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ),
+                )
+              },
             )}
           </div>
         </div>
       )}
-    </div>
-  )
-}
-
-interface CommentSectionProps {
-  pairKey: string
-  comments: Comment[]
-  isLoading: boolean
-  foodNamesById?: Record<string, string>
-  userVoteForComment?: { result: 'win' | 'tie'; winnerFoodId?: string } | null
-}
-
-function CommentSection({ pairKey, comments, isLoading, foodNamesById, userVoteForComment }: CommentSectionProps) {
-  const [newComment, setNewComment] = useState('')
-  // Default to 'tie' to avoid invalid payloads when user doesn't choose a winner
-  const [selectedResult, setSelectedResult] = useState<'win' | 'tie'>('tie')
-  const [selectedWinnerId, setSelectedWinnerId] = useState<string | undefined>(
-    undefined,
-  )
-  const commentMutation = useCommentMutation()
-
-  // Prefer server-provided vote to lock selection; fallback stays 'tie' if absent
-  useEffect(() => {
-    if (!userVoteForComment) return
-    if (userVoteForComment.result === 'win' && userVoteForComment.winnerFoodId) {
-      setSelectedResult('win')
-      setSelectedWinnerId(userVoteForComment.winnerFoodId)
-    } else if (userVoteForComment.result === 'tie') {
-      setSelectedResult('tie')
-      setSelectedWinnerId(undefined)
-    }
-  }, [userVoteForComment])
-
-  const handleSubmitComment = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newComment.trim()) return
-
-    try {
-      await commentMutation.mutateAsync({
-        pairKey,
-        result: selectedResult,
-        winnerFoodId:
-          selectedResult === 'win' ? selectedWinnerId : undefined,
-        content: newComment.trim(),
-      })
-      setNewComment('')
-      // If not locked by server vote, reset selection back to tie after successful submit
-      if (!userVoteForComment) {
-        setSelectedResult('tie')
-        setSelectedWinnerId(undefined)
-      }
-    } catch (error) {
-      console.error('Failed to submit comment:', error)
-    }
-  }
-
-  if (isLoading) {
-    return (
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold">Comments</h3>
-        <div className="animate-pulse space-y-2">
-          <div className="h-4 bg-muted rounded w-3/4"></div>
-          <div className="h-4 bg-muted rounded w-1/2"></div>
-        </div>
-      </div>
-    )
-  }
-
-  const locked = !!userVoteForComment
-
-  return (
-    <div className="space-y-4">
-      <h3 className="text-lg font-semibold">Comments</h3>
-
-      {/* Vote context for this comment */}
-      <div className="space-y-2">
-        <p className="text-sm text-muted-foreground">Your vote for this comment</p>
-        {locked && (
-          <p className="text-xs text-muted-foreground">
-            Locked to your vote: {selectedResult === 'win' && selectedWinnerId
-              ? `Chose ${foodNamesById?.[selectedWinnerId] || selectedWinnerId}`
-              : 'Tie'}
-          </p>
-        )}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-6 space-y-2 sm:space-y-0">
-          {/* Food options (win) */}
-          {Object.entries(foodNamesById || {}).map(([id, name]) => (
-            <label key={id} className="inline-flex items-center space-x-2">
-              <input
-                type="radio"
-                name="comment-vote"
-                value={id}
-                checked={selectedResult === 'win' && selectedWinnerId === id}
-                disabled={locked}
-                onChange={() => {
-                  setSelectedResult('win')
-                  setSelectedWinnerId(id)
-                }}
-              />
-              <span className="text-sm">{name}</span>
-            </label>
-          ))}
-          {/* Tie option */}
-          <label className="inline-flex items-center space-x-2">
-            <input
-              type="radio"
-              name="comment-vote"
-              value="tie"
-              checked={selectedResult === 'tie'}
-              disabled={locked}
-              onChange={() => {
-                setSelectedResult('tie')
-                setSelectedWinnerId(undefined)
-              }}
-            />
-            <span className="text-sm">Tie</span>
-          </label>
-        </div>
-      </div>
-
-      <form onSubmit={handleSubmitComment} className="space-y-2">
-        <Textarea
-          placeholder="Share your thoughts about this comparison..."
-          value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
-          maxLength={280}
-          disabled={commentMutation.isPending}
-        />
-        <div className="flex justify-between items-center">
-          <span className="text-xs text-muted-foreground">
-            {newComment.length}/280 characters
-          </span>
-          <Button
-            type="submit"
-            disabled={
-              !newComment.trim() ||
-              commentMutation.isPending ||
-              (selectedResult === 'win' && !selectedWinnerId)
-            }
-            size="sm"
-          >
-            {commentMutation.isPending ? 'Posting...' : 'Post Comment'}
-          </Button>
-        </div>
-      </form>
-
-      {commentMutation.error && (
-        <ErrorMessage
-          error={commentMutation.error}
-          onRetry={() => commentMutation.reset()}
-          className="text-sm"
-        />
-      )}
-
-      <div className="space-y-3">
-        {comments.length === 0 ? (
-          <p className="text-muted-foreground text-sm">
-            No comments yet. Be the first to share your thoughts!
-          </p>
-        ) : (
-          comments.map((comment) => (
-            <div key={comment.id} className="border rounded-lg p-3">
-              <div className="flex justify-between items-start mb-2">
-                <span className="text-xs text-muted-foreground">
-                  {comment.nationality && comment.nationality !== 'unknown'
-                    ? comment.nationality
-                    : 'Anonymous'}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {new Date(comment.createdAt).toLocaleDateString()}
-                </span>
-              </div>
-              <p className="text-sm">{comment.content}</p>
-              {comment.result === 'win' && comment.winnerFoodId && (
-                <div className="text-xs text-muted-foreground mt-1">
-                  Chose: {foodNamesById?.[comment.winnerFoodId] || `Food ${comment.winnerFoodId}`}
-                </div>
-              )}
-              {comment.result === 'tie' && (
-                <div className="text-xs text-muted-foreground mt-1">
-                  Voted: Tie
-                </div>
-              )}
-            </div>
-          ))
-        )}
-      </div>
     </div>
   )
 }
@@ -304,8 +147,6 @@ export function Results({ pairKey }: ResultsProps) {
     isLoading: statsLoading,
     error: statsError,
   } = useVoteStats(pairKey)
-  const { data: comments = [], isLoading: commentsLoading } =
-    useComments(pairKey)
 
   const handleContinue = () => {
     navigate({ to: '/' })
@@ -371,6 +212,9 @@ export function Results({ pairKey }: ResultsProps) {
     )
   }
 
+  // Extract food IDs from pairKey for ExpandedComments
+  const { foodId1, foodId2 } = extractFoodIdsFromPairKey(pairKey)
+
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       <div className="text-center">
@@ -382,12 +226,21 @@ export function Results({ pairKey }: ResultsProps) {
 
       <VoteStatsDisplay stats={stats} pairKey={pairKey} />
 
-      <CommentSection
+      {/* Comment Creation Section */}
+      <CommentCreation
         pairKey={pairKey}
-        comments={comments}
-        isLoading={commentsLoading}
         foodNamesById={stats.foodNamesById}
         userVoteForComment={stats.userVoteForComment}
+      />
+
+      {/* Expanded Comments Section */}
+      <ExpandedComments
+        pairKey={pairKey}
+        foodId1={foodId1}
+        foodId2={foodId2}
+        foodNamesById={stats.foodNamesById}
+        currentPairingLimit={10}
+        expandedLimit={10}
       />
 
       <div className="text-center">

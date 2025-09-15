@@ -174,6 +174,31 @@ export const PaginationQuerySchema = z.object({
   cursor: z.string().optional(),
 })
 
+export const ExpandedCommentsQuerySchema = z.object({
+  currentPairingLimit: z
+    .string()
+    .optional()
+    .transform((val) => (val ? parseInt(val, 10) : 8)) // Optimized default
+    .refine(
+      (val) => val >= 1 && val <= 15, // Reduced maximum for performance
+      'Current pairing limit must be between 1 and 15',
+    ),
+  expandedLimit: z
+    .string()
+    .optional()
+    .transform((val) => (val ? parseInt(val, 10) : 12)) // Optimized default
+    .refine(
+      (val) => val >= 1 && val <= 25, // Reduced maximum for performance
+      'Expanded limit must be between 1 and 25',
+    ),
+  includeExpanded: z
+    .string()
+    .optional()
+    .default('true')
+    .transform((val) => val !== 'false'),
+  cursor: z.string().optional(),
+})
+
 // Content sanitization function
 export function sanitizeContent(content: string): string {
   return content
@@ -205,3 +230,4 @@ export type VoteRequest = z.infer<typeof VoteRequestSchema>
 export type CommentRequest = z.infer<typeof CommentRequestSchema>
 export type UpdateNationalityRequest = z.infer<typeof UpdateNationalitySchema>
 export type PaginationQuery = z.infer<typeof PaginationQuerySchema>
+export type ExpandedCommentsQuery = z.infer<typeof ExpandedCommentsQuerySchema>

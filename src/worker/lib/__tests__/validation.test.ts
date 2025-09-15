@@ -4,6 +4,7 @@ import {
   CommentRequestSchema,
   UpdateNationalitySchema,
   PaginationQuerySchema,
+  ExpandedCommentsQuerySchema,
   sanitizeContent,
   formatValidationError,
 } from '../validation'
@@ -240,6 +241,63 @@ describe('PaginationQuerySchema', () => {
   it('should reject zero or negative limits', () => {
     const invalidQuery = { limit: '0' }
     const result = PaginationQuerySchema.safeParse(invalidQuery)
+    expect(result.success).toBe(false)
+  })
+})
+
+describe('ExpandedCommentsQuerySchema', () => {
+  it('should validate valid expanded comments query parameters', () => {
+    const validQuery = {
+      currentPairingLimit: '5',
+      expandedLimit: '15',
+      includeExpanded: 'true',
+      cursor: 'some-cursor',
+    }
+    const result = ExpandedCommentsQuerySchema.safeParse(validQuery)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.currentPairingLimit).toBe(5)
+      expect(result.data.expandedLimit).toBe(15)
+      expect(result.data.includeExpanded).toBe(true)
+      expect(result.data.cursor).toBe('some-cursor')
+    }
+  })
+
+  it('should use default values when parameters not provided', () => {
+    const validQuery = {}
+    const result = ExpandedCommentsQuerySchema.safeParse(validQuery)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.currentPairingLimit).toBe(10)
+      expect(result.data.expandedLimit).toBe(10)
+      expect(result.data.includeExpanded).toBe(true)
+    }
+  })
+
+  it('should handle includeExpanded false', () => {
+    const validQuery = { includeExpanded: 'false' }
+    const result = ExpandedCommentsQuerySchema.safeParse(validQuery)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.includeExpanded).toBe(false)
+    }
+  })
+
+  it('should reject currentPairingLimit outside valid range', () => {
+    const invalidQuery = { currentPairingLimit: '21' } // Exceeds max of 20
+    const result = ExpandedCommentsQuerySchema.safeParse(invalidQuery)
+    expect(result.success).toBe(false)
+  })
+
+  it('should reject expandedLimit outside valid range', () => {
+    const invalidQuery = { expandedLimit: '31' } // Exceeds max of 30
+    const result = ExpandedCommentsQuerySchema.safeParse(invalidQuery)
+    expect(result.success).toBe(false)
+  })
+
+  it('should reject zero or negative limits', () => {
+    const invalidQuery = { currentPairingLimit: '0', expandedLimit: '-1' }
+    const result = ExpandedCommentsQuerySchema.safeParse(invalidQuery)
     expect(result.success).toBe(false)
   })
 })

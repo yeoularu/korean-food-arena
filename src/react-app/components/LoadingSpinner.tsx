@@ -72,6 +72,118 @@ export function CardSkeleton({ className = '' }: { className?: string }) {
   )
 }
 
+// Comment-specific loading skeletons
+export function CommentSkeleton({
+  showContext = false,
+}: {
+  showContext?: boolean
+}) {
+  return (
+    <div className="animate-pulse border rounded-lg p-3 bg-white shadow-sm">
+      {/* Header skeleton */}
+      <div className="flex justify-between items-start mb-2">
+        <div className="flex items-center gap-2">
+          <div className="h-3 bg-muted-foreground/20 rounded w-16"></div>
+          {showContext && (
+            <div className="h-4 bg-blue-100 rounded-full w-20"></div>
+          )}
+        </div>
+        <div className="h-3 bg-muted-foreground/20 rounded w-12"></div>
+      </div>
+
+      {/* Content skeleton */}
+      <div className="space-y-2 mb-3">
+        <div className="h-3 bg-muted-foreground/20 rounded w-full"></div>
+        <div className="h-3 bg-muted-foreground/20 rounded w-4/5"></div>
+        <div className="h-3 bg-muted-foreground/20 rounded w-3/5"></div>
+      </div>
+
+      {/* Footer skeleton */}
+      <div className="space-y-1">
+        <div className="flex items-center gap-2">
+          <div className="h-3 bg-muted-foreground/20 rounded w-10"></div>
+          <div className="h-5 bg-green-100 rounded w-16"></div>
+        </div>
+        {showContext && (
+          <div className="h-3 bg-muted-foreground/20 rounded w-24"></div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export function CommentsSkeleton({
+  count = 3,
+  showExpandedSection = true,
+}: {
+  count?: number
+  showExpandedSection?: boolean
+}) {
+  return (
+    <div className="space-y-6" role="region" aria-label="Loading comments">
+      {/* Current pairing comments skeleton */}
+      <section>
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-1 h-6 bg-muted-foreground/20 rounded-full"></div>
+          <div className="h-5 bg-muted-foreground/20 rounded w-48"></div>
+          <div className="h-4 bg-muted-foreground/20 rounded w-8"></div>
+        </div>
+        <div className="space-y-3">
+          {Array.from({ length: Math.min(count, 2) }).map((_, i) => (
+            <CommentSkeleton key={`current-${i}`} showContext={false} />
+          ))}
+        </div>
+      </section>
+
+      {/* Expanded comments skeleton */}
+      {showExpandedSection && (
+        <section>
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-1 h-6 bg-muted-foreground/20 rounded-full"></div>
+            <div className="h-5 bg-muted-foreground/20 rounded w-56"></div>
+            <div className="h-4 bg-muted-foreground/20 rounded w-8"></div>
+          </div>
+          <div className="space-y-3">
+            {Array.from({ length: count }).map((_, i) => (
+              <CommentSkeleton key={`expanded-${i}`} showContext={true} />
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  )
+}
+
+export function CommentCreationSkeleton() {
+  return (
+    <div className="animate-pulse space-y-4">
+      <div className="h-5 bg-muted-foreground/20 rounded w-32"></div>
+
+      {/* Vote options skeleton */}
+      <div className="space-y-2">
+        <div className="h-3 bg-muted-foreground/20 rounded w-40"></div>
+        <div className="flex flex-col sm:flex-row sm:space-x-6 space-y-2 sm:space-y-0">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="flex items-center space-x-2">
+              <div className="w-4 h-4 bg-muted-foreground/20 rounded-full"></div>
+              <div className="h-3 bg-muted-foreground/20 rounded w-16"></div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Textarea skeleton */}
+      <div className="h-20 bg-muted-foreground/20 rounded"></div>
+
+      {/* Footer skeleton */}
+      <div className="flex justify-between items-center">
+        <div className="h-3 bg-muted-foreground/20 rounded w-20"></div>
+        <div className="h-8 bg-muted-foreground/20 rounded w-24"></div>
+      </div>
+    </div>
+  )
+}
+
 // Food card loading skeleton
 export function FoodCardSkeleton() {
   return (

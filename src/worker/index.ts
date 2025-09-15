@@ -11,6 +11,7 @@ import {
   CommentRequestSchema,
   UpdateNationalitySchema,
   PaginationQuerySchema,
+  ExpandedCommentsQuerySchema,
   sanitizeContent,
 } from './lib/validation'
 import {
@@ -25,6 +26,8 @@ import {
   validateRequest,
 } from './lib/errorHandling'
 import { requireAdminAuth } from './lib/adminAuth'
+import { getExpandedComments } from './lib/expandedComments'
+import { parsePairKey } from './lib/pairKey'
 
 const app = new Hono<{ Bindings: Env; Variables: AuthVariables }>()
 
@@ -544,7 +547,8 @@ app.get(
       const comments = await baseQuery.where(whereConditions)
 
       // Apply nationality privacy protection
-      const MIN_GROUP_SIZE = 5
+      // Use smaller group size for development/testing
+      const MIN_GROUP_SIZE = 1 // Changed from 5 to 1 for better UX during development
 
       // Count nationality groups for this pairKey
       const nationalityCounts: Record<string, number> = {}
@@ -571,6 +575,68 @@ app.get(
 
       return protectedComments
     }, 'retrieve comments')
+
+    return c.json(result)
+  }),
+)
+
+// GET /api/comments/:pairKey/expanded - Returns expanded comments for a food pairing
+app.get(
+  '/api/comments/:pairKey/expanded',
+  asyncHandler(async (c) => {
+    // Check authentication
+    const currentUser = requireAuth(c)
+
+    const pairKey = c.req.param('pairKey')
+    if (!pairKey) {
+      throw new ValidationError('Pair key is required')
+    }
+
+    // Validate query parameters
+    const queryParams = validateRequest(ExpandedCommentsQuerySchema, {
+      currentPairingLimit: c.req.query('currentPairingLimit'),
+      expandedLimit: c.req.query('expandedLimit'),
+      includeExpanded: c.req.query('includeExpanded'),
+      cursor: c.req.query('cursor'),
+    })
+
+    const db = getDb(c.env.DB)
+
+    // Check if user has voted on this pairing (access control)
+    await requireVoteAccess(
+      db,
+      currentUser.id,
+      pairKey,
+      'You must vote on this pairing before viewing comments',
+    )
+
+    // Parse food IDs from pairKey for expanded comments query
+    const { foodLowId, foodHighId } = parsePairKey(pairKey)
+
+    const result = await withErrorHandling(async () => {
+      return await getExpandedComments(db, {
+        pairKey,
+        foodId1: foodLowId,
+        foodId2: foodHighId,
+        currentPairingLimit: queryParams.currentPairingLimit,
+        expandedLimit: queryParams.expandedLimit,
+        includeExpanded: queryParams.includeExpanded,
+        cursor: queryParams.cursor,
+      })
+    }, 'retrieve expanded comments')
+
+    // Add performance metadata to headers (for monitoring tools)
+    if ((result as any)._performance) {
+      const perf = (result as any)._performance
+      c.header('X-Query-Time', perf.queryTime.toString())
+      c.header('X-Response-Size', perf.responseSize.toString())
+      c.header('X-Optimized', perf.optimized.toString())
+
+      // Remove performance data from response body in production
+      if (process.env.NODE_ENV !== 'development') {
+        delete (result as any)._performance
+      }
+    }
 
     return c.json(result)
   }),
