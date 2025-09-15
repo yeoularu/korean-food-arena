@@ -32,6 +32,8 @@ export interface Food {
   imageUrl: string
   eloScore: number
   totalVotes: number
+  // Added: number of wins (server-computed), optional for backward compatibility
+  winCount?: number
   createdAt: string
   updatedAt: string
 }

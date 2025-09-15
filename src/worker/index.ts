@@ -140,10 +140,30 @@ app.get(
 
     const result = await withErrorHandling(async () => {
       // Get all foods sorted by ELO score DESC, then totalVotes DESC, then name ASC
-      return await db
+      const foods = await db
         .select()
         .from(food)
         .orderBy(desc(food.eloScore), desc(food.totalVotes), food.name)
+
+      // Aggregate wins per food (result='win')
+      const winRows = await db
+        .select({
+          winnerFoodId: vote.winnerFoodId,
+          wins: sql<number>`COUNT(*)`.as('wins'),
+        })
+        .from(vote)
+        .where(eq(vote.result, 'win'))
+        .groupBy(vote.winnerFoodId)
+
+      const winMap: Record<string, number> = {}
+      winRows.forEach((r) => {
+        if (r.winnerFoodId) {
+          winMap[r.winnerFoodId] = Number(r.wins) || 0
+        }
+      })
+
+      // Merge winCount into foods
+      return foods.map((f) => ({ ...f, winCount: winMap[f.id] ?? 0 }))
     }, 'retrieve food leaderboard')
 
     return c.json(result)

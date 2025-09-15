@@ -44,7 +44,7 @@ function LeaderboardItem({ food, position }: LeaderboardItemProps) {
         <h3 className="font-semibold text-lg truncate">{food.name}</h3>
         <div className="flex items-center space-x-4 text-sm text-muted-foreground">
           <span>ELO: {food.eloScore}</span>
-          <span>Votes: {food.totalVotes}</span>
+          <span>Votes: {food.winCount ?? 0}</span>
         </div>
       </div>
 
