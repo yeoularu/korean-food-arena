@@ -29,5 +29,13 @@
       "@/*": ["./src/react-app/*"]
     }
   },
-  "include": ["src/react-app"]
+  "include": ["src/react-app"],
+  "exclude": [
+    // Exclude unit/integration tests from app typecheck
+    "src/react-app/**/*.test.ts",
+    "src/react-app/**/*.test.tsx",
+    "src/react-app/**/__tests__/**",
+    // Exclude demo component that relies on vitest globals
+    "src/react-app/components/PerformanceDemo.tsx"
+  ]
 }

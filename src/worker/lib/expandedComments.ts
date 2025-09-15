@@ -387,7 +387,7 @@ export async function getExpandedComments(
     )
     const lastComment = allEnhancedComments[allEnhancedComments.length - 1]
 
-    const result = {
+    const result: ExpandedCommentsResponse = {
       currentPairingComments: enhancedCurrentComments,
       expandedComments: enhancedExpandedComments,
       totalCount,
@@ -402,7 +402,16 @@ export async function getExpandedComments(
 
     // Add performance metadata to response for debugging (in development)
     if (process.env.NODE_ENV === 'development') {
-      ;(result as unknown)._performance = {
+      type PerformanceMeta = {
+        queryTime: number
+        responseSize: number
+        optimized: boolean
+        suggestions?: unknown
+      }
+      const withPerf = result as ExpandedCommentsResponse & {
+        _performance?: PerformanceMeta
+      }
+      withPerf._performance = {
         queryTime: performanceLog.metrics.queryExecutionTime,
         responseSize: performanceLog.metrics.responseSize,
         optimized: optimizedLimits.optimized,

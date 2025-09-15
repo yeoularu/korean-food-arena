@@ -413,8 +413,10 @@ export function searchCountries(query: string): Country[] {
   // Cache results (with size limit to prevent memory leaks)
   if (searchCache.size >= CACHE_SIZE_LIMIT) {
     // Clear oldest entries (simple FIFO)
-    const firstKey = searchCache.keys().next().value
-    searchCache.delete(firstKey)
+    const first = searchCache.keys().next()
+    if (!first.done && first.value) {
+      searchCache.delete(first.value)
+    }
   }
   searchCache.set(lowerQuery, results)
 

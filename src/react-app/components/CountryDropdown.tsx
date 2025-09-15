@@ -270,7 +270,7 @@ export const CountryDropdown = React.memo<CountryDropdownProps>(
             ) : (
               <div style={{ height: totalHeight, position: 'relative' }}>
                 <div style={{ transform: `translateY(${offsetY}px)` }}>
-                  {visibleItems.map((country, index) => (
+                  {visibleItems.map((country) => (
                     <React.Fragment key={country.code}>
                       {/* Separator after "Prefer not to say" */}
                       {country.originalIndex === 1 &&

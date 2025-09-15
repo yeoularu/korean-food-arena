@@ -27,6 +27,7 @@ import {
 } from './lib/errorHandling'
 import { requireAdminAuth } from './lib/adminAuth'
 import { getExpandedComments } from './lib/expandedComments'
+import type { ExpandedCommentsResponse } from './lib/expandedComments'
 import { parsePairKey } from './lib/pairKey'
 
 const app = new Hono<{ Bindings: Env; Variables: AuthVariables }>()
@@ -646,15 +647,24 @@ app.get(
     }, 'retrieve expanded comments')
 
     // Add performance metadata to headers (for monitoring tools)
-    if ((result as any)._performance) {
-      const perf = (result as any)._performance
+    type PerformanceMeta = {
+      queryTime: number
+      responseSize: number
+      optimized: boolean
+      suggestions?: unknown
+    }
+    const maybeWithPerf = result as ExpandedCommentsResponse & {
+      _performance?: PerformanceMeta
+    }
+    if (maybeWithPerf._performance) {
+      const perf = maybeWithPerf._performance
       c.header('X-Query-Time', perf.queryTime.toString())
       c.header('X-Response-Size', perf.responseSize.toString())
       c.header('X-Optimized', perf.optimized.toString())
 
       // Remove performance data from response body in production
       if (process.env.NODE_ENV !== 'development') {
-        delete (result as any)._performance
+        delete maybeWithPerf._performance
       }
     }
 
